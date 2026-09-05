@@ -84,6 +84,10 @@ def build(ml_root, inputs, output, *, repo=".", archive=True):
         _copy_tree(repo / "src", output / "src_dl")
         _copy_tree(ml_root / "src", output / "src_ml")
     _copy_tree(repo / "tests", output / "tests")
+    # Offline smoke checkpoint: без него тесты C-02 эксперта нечем питать.
+    _copy_tree(
+        repo / "artifacts/dl/cpu_smoke_v3", output / "artifacts/dl/cpu_smoke_v3"
+    )
     _copy_tree(inputs, output / "inputs")
     shutil.copyfile(repo / "configs/dl/tcn.yaml", output / "tcn.yaml")
     shutil.copyfile(

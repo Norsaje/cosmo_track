@@ -1,6 +1,7 @@
 """DL-эксперт за интерфейсом C-02: контракт соблюдён, интервалы не выдуманы."""
 
 from dataclasses import dataclass
+from pathlib import Path
 import sys
 import types
 
@@ -49,6 +50,8 @@ def contracts(monkeypatch):
 @pytest.fixture
 def expert():
     pytest.importorskip("torch")
+    if not Path(CHECKPOINT).is_dir():
+        pytest.skip(f"Нет offline smoke checkpoint: {CHECKPOINT}")
     frame = training_fixture()
     reference = frame.loc[frame.primary_ndvi.notna()]
     return ResidualTCNExpert(
