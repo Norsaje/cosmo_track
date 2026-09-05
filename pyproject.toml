@@ -1,0 +1,40 @@
+[project]
+name = "cosmo-track"
+version = "0.1.0"
+description = "Vegetation recovery — Developer 4 helpers (validation, fixtures, docs)."
+requires-python = ">=3.11,<3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pandas>=2.2,<3",
+    "numpy>=2.0,<3",
+    "pydantic>=2.7,<3",
+    "pytest>=8.2,<9",
+    "ruff>=0.6,<1",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# E/F = pycodestyle/pyflakes; I = isort; B = bugbear (безопасный минимум)
+select = ["E", "F", "I", "B"]
+ignore = ["E501"]  # длинные строки в скриптах с argparse допустимы
+
+[tool.ruff.lint.per-file-ignores]
+# В скриптах с CLI часто длинные строки argparse
+"scripts/*.py" = ["E501"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests/tools", "tests/smoke", "tests/fixtures"]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+filterwarnings = [
+    "error",
+    # pandas FutureWarning про parse_dates можно глушить точечно, глобально не глушим
+]
