@@ -240,3 +240,35 @@ def test_map_problems_are_distinguished(page: str) -> None:
     # Ошибка одного тайла не должна поднимать плашку: MapLibre шлёт error и на
     # отменённых при зуме запросах, а пугать сообщением поверх работающей карты нельзя.
     assert "tilesLoaded === 0 && tileErrors >= 3" in page
+
+
+def test_hidden_attribute_actually_hides(page: str) -> None:
+    """`hidden` обязан скрывать, а не просто присутствовать в разметке.
+
+    Браузер реализует его как `[hidden]{display:none}` в собственном стиле, и любое
+    авторское правило с display перебивает его по специфичности. Здесь это ловилось
+    на живом стенде: `.chip{display:inline-flex}` и `.alert{display:flex}` показывали
+    элементы с hidden — в шапке висел пустой красный индикатор, а плашка о подложке
+    карты была видна независимо от того, загрузились тайлы или нет.
+
+    Правило проверяется явно, потому что дефект не виден ни в разметке, ни в логах:
+    атрибут на месте, JS отрабатывает верно, а элемент всё равно на экране.
+    """
+    assert re.search(r"\[hidden\]\s*\{[^}]*display:\s*none\s*!important", page)
+
+
+def test_hidden_elements_use_classes_that_would_override_it(page: str) -> None:
+    """Проверка осмысленности предыдущего теста.
+
+    Если однажды ни один скрываемый элемент не будет иметь класса с display,
+    правило `[hidden]` перестанет быть нужным — и тест выше станет пустым.
+    Пока такие элементы есть, защита обязательна.
+    """
+    assert "display: inline-flex" in page or "display: flex" in page
+    assert re.search(r'id="tiles-note"[^>]*hidden', page)
+    assert re.search(r'id="health-chip"[^>]*hidden', page)
+
+
+def test_status_indicator_starts_neutral(page: str) -> None:
+    """До первой проверки состояние неизвестно, и красный цвет сообщал бы неправду."""
+    assert re.search(r'id="health-chip" class="chip chip-default"', page)

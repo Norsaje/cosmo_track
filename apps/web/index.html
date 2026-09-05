@@ -99,6 +99,15 @@
     }
 
     *, *::before, *::after { box-sizing: border-box; }
+
+    /* Атрибут `hidden` браузер реализует как `[hidden]{display:none}` в собственном
+       стиле, и ЛЮБОЕ авторское правило с display его перебивает. Из-за этого
+       `.chip{display:inline-flex}` и `.alert{display:flex}` показывали элементы,
+       помеченные hidden: в шапке постоянно висел пустой красный индикатор, а
+       плашка «подложка не загрузилась» была видна независимо от того, загрузились
+       тайлы или нет. Правило ниже возвращает hidden обещанное поведение. */
+    [hidden] { display: none !important; }
+
     html, body { height: 100%; }
     body {
       margin: 0;
@@ -299,7 +308,7 @@
     <!-- Индикатор появляется только при проблеме. Постоянно зелёный значок не несёт
          информации: глаз перестаёт его замечать ровно к тому моменту, когда он
          впервые становится важным. aria-live озвучивает появление скринридеру. -->
-    <span id="health-chip" class="chip chip-danger" style="margin-left:auto"
+    <span id="health-chip" class="chip chip-default" style="margin-left:auto"
           role="status" aria-live="polite" hidden>
       <i class="dot"></i><span id="health-text"></span>
     </span>
