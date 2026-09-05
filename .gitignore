@@ -16,10 +16,6 @@ venv/
 /tmp/
 /.coord-main/
 
-# Derived C-03 inputs: regenerate with veg_recovery.dl.c03_bridge.
-# frame.csv.gz duplicates data/train_dataset.csv byte for byte.
-/artifacts/dl/c03_derived/frame.csv.gz
-
 # Per-fold research checkpoints полного прогона: ~44 МБ и воспроизводимы из
 # manifest + seed. Публикуются OOF по seed, experiments.csv, cv_report.json и
 # learning_curves.json — они содержат все числа отчёта.
