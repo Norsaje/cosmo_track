@@ -1,0 +1,50 @@
+{
+  "method": "empirical_oof_absolute_residual",
+  "levels": [
+    0.8,
+    0.95
+  ],
+  "min_bin_size": 60,
+  "calibrated": false,
+  "n": 13317,
+  "bins": {
+    "hard_context:landsat": {
+      "0.8": 0.11939285850497103,
+      "0.95": 0.2246420633511703
+    },
+    "hard_context:modis": {
+      "0.8": 0.12505987745819053,
+      "0.95": 0.2211396596858638
+    },
+    "hard_context:s2": {
+      "0.8": 0.18700685822896768,
+      "0.95": 0.35900387556901275
+    },
+    "hard_context:uncertain": {
+      "0.8": 0.20515157511893561,
+      "0.95": 0.36512591746549516
+    },
+    "short_two_sided:landsat": {
+      "0.8": 0.08584352654482222,
+      "0.95": 0.15641992016391504
+    },
+    "short_two_sided:modis": {
+      "0.8": 0.15498781153049074,
+      "0.95": 0.26789575537014243
+    },
+    "short_two_sided:s2": {
+      "0.8": 0.08791059517643418,
+      "0.95": 0.17234533632454155
+    },
+    "short_two_sided:uncertain": {
+      "0.8": 0.092771116979398,
+      "0.95": 0.18722557488491987
+    }
+  },
+  "global": {
+    "0.8": 0.10719353830861905,
+    "0.95": 0.22219842204337428
+  },
+  "assessment": "Empirical OOF intervals; inspect cross-fold subgroup coverage before any calibration claim.",
+  "status": "empirical_oof_not_certified"
+}

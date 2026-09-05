@@ -1,0 +1,44 @@
+[
+  {
+    "model": "nearest_left",
+    "composite_rmse": 0.12110541591362775,
+    "decision": "reject",
+    "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+  },
+  {
+    "model": "nearest_right",
+    "composite_rmse": 0.12076114792553075,
+    "decision": "reject",
+    "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+  },
+  {
+    "model": "mean_neighbors",
+    "composite_rmse": 0.1066986441701292,
+    "decision": "keep",
+    "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+  },
+  {
+    "model": "linear",
+    "composite_rmse": 0.1076678372272071,
+    "decision": "reject",
+    "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+  },
+  {
+    "model": "seasonal_crop",
+    "composite_rmse": 0.17338732053708233,
+    "decision": "reject",
+    "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+  },
+  {
+    "model": "pchip",
+    "composite_rmse": 0.11061585839247301,
+    "decision": "reject",
+    "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+  },
+  {
+    "model": "akima",
+    "composite_rmse": 0.11354467347722175,
+    "decision": "reject",
+    "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+  }
+]

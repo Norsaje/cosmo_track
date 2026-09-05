@@ -1,0 +1,9 @@
+{
+  "train_sha256": "a75e530d0fb51581ad6800f84b3875233778801491f02236917862faf9b424ec",
+  "test_sha256": "f7ba087818175ea644fc9fe652c6a3874b5bfcde7df197d3e7541cb95876f855",
+  "iterations": 1800,
+  "rounds": 3,
+  "device": "CPU",
+  "feature_version": "1.0.0",
+  "source_hash": "55ace6d98d6e42a06492cb1b0126d1616d0aa32e43e5a39e3602b06446361e26"
+}

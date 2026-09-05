@@ -1,0 +1,16 @@
+# Контекст сборки без этого — 350 МБ, из них .venv 296 МБ и data/ 23 МБ.
+.venv/
+.git/
+.github/
+data/
+docs/*.pdf
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+# Секреты в контекст не попадают вообще: даже случайный `COPY . .` их не запечёт.
+.env
+.env.local
+*.pem
+*.key

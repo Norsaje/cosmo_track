@@ -1,0 +1,6 @@
+# CUDA-совместимый torch уже установлен в GPU-образе Kaggle: не заменять CPU wheel.
+tabicl==2.1.1
+einops>=0.7,<1
+huggingface-hub>=0.30,<2
+psutil>=5.9,<8
+tqdm>=4.64,<5

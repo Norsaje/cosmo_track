@@ -1,0 +1,134 @@
+{
+  "train": {
+    "shape": [
+      99955,
+      21
+    ],
+    "polygons": 39,
+    "date_min": "2010-04-01",
+    "date_max": "2024-10-30",
+    "finite_targets": 30520,
+    "synthetic_gaps": 0,
+    "natural_missing_targets": 69435,
+    "crop_types": {
+      "озимая пшеница": 52787,
+      "зерновые": 27119,
+      "подсолнечник": 15975,
+      "пастбища/зерновые": 4074
+    },
+    "missing_counts": {
+      "anon_polygon_id": 0,
+      "date": 0,
+      "s2_ndvi": 88720,
+      "s2_evi": 88720,
+      "s2_ndwi": 88720,
+      "landsat_ndvi": 84363,
+      "landsat_evi": 84363,
+      "landsat_ndwi": 84363,
+      "modis_ndvi": 92428,
+      "modis_evi": 92428,
+      "era5_temp_c": 7300,
+      "era5_precip_mm": 7300,
+      "year": 0,
+      "primary_ndvi": 69435,
+      "doy": 0,
+      "ndvi_climatology_mean": 69435,
+      "ndvi_climatology_std": 69435,
+      "ndvi_zscore": 69435,
+      "n_reference_years": 0,
+      "status": 69435,
+      "crop_type": 0
+    },
+    "infinite_counts": {
+      "s2_ndvi": 0,
+      "s2_evi": 0,
+      "s2_ndwi": 0,
+      "landsat_ndvi": 0,
+      "landsat_evi": 0,
+      "landsat_ndwi": 0,
+      "modis_ndvi": 0,
+      "modis_evi": 0,
+      "era5_temp_c": 0,
+      "era5_precip_mm": 0,
+      "year": 0,
+      "primary_ndvi": 0,
+      "doy": 0,
+      "ndvi_climatology_mean": 0,
+      "ndvi_climatology_std": 0,
+      "ndvi_zscore": 0,
+      "n_reference_years": 0
+    },
+    "duplicate_keys": 0
+  },
+  "test": {
+    "shape": [
+      57185,
+      20
+    ],
+    "polygons": 78,
+    "date_min": "2010-04-01",
+    "date_max": "2025-10-30",
+    "finite_targets": 17641,
+    "synthetic_gaps": 3112,
+    "natural_missing_targets": 36432,
+    "crop_types": {
+      "озимая пшеница": 32160,
+      "зерновые": 16209,
+      "пастбища/зерновые": 7538,
+      "подсолнечник": 1278
+    },
+    "missing_counts": {
+      "anon_polygon_id": 0,
+      "date": 0,
+      "s2_ndvi": 49370,
+      "s2_evi": 49370,
+      "s2_ndwi": 49370,
+      "landsat_ndvi": 48942,
+      "landsat_evi": 48943,
+      "landsat_ndwi": 48942,
+      "modis_ndvi": 53228,
+      "modis_evi": 53228,
+      "era5_temp_c": 9183,
+      "era5_precip_mm": 9183,
+      "year": 3112,
+      "primary_ndvi": 39544,
+      "doy": 3112,
+      "ndvi_climatology_mean": 39544,
+      "ndvi_climatology_std": 39544,
+      "n_reference_years": 3112,
+      "is_synthetic_gap": 0,
+      "crop_type": 0
+    },
+    "infinite_counts": {
+      "s2_ndvi": 0,
+      "s2_evi": 0,
+      "s2_ndwi": 0,
+      "landsat_ndvi": 0,
+      "landsat_evi": 0,
+      "landsat_ndwi": 0,
+      "modis_ndvi": 0,
+      "modis_evi": 0,
+      "era5_temp_c": 0,
+      "era5_precip_mm": 0,
+      "year": 0,
+      "primary_ndvi": 0,
+      "doy": 0,
+      "ndvi_climatology_mean": 0,
+      "ndvi_climatology_std": 0,
+      "n_reference_years": 0
+    },
+    "duplicate_keys": 0
+  },
+  "fingerprints": {
+    "train": "a75e530d0fb51581ad6800f84b3875233778801491f02236917862faf9b424ec",
+    "test": "3c5c0e27eef8266bcf6dce09c9b556c073cee3902c065a94e4ea7a59edb00993"
+  },
+  "train_target_range": [
+    -2.1303786081123266,
+    0.9621426466953232
+  ],
+  "test_visible_target_range": [
+    -0.6362029019829294,
+    1.8428536897650167
+  ]
+}

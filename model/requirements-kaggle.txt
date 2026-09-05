@@ -1,0 +1,7 @@
+# Совместимо с актуальным GPU-образом Kaggle, без замены установленного CUDA torch.
+numpy>=2.0,<3
+pandas>=2.2,<4
+scipy>=1.13,<2
+scikit-learn>=1.6,<2
+catboost==1.2.10
+lightgbm==4.7.0

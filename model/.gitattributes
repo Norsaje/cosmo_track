@@ -1,0 +1,6 @@
+*.csv -text
+*.pkl -text
+*.ckpt -text
+*.npz -text
+*.py text eol=lf
+*.json text eol=lf

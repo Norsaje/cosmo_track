@@ -1,0 +1,9 @@
+{
+  "interval_kind": "empirical; not a guaranteed conformal interval for dependent time series",
+  "development_absolute_error_q90": 0.08126096103376701,
+  "audit_coverage": 0.8980537534754403,
+  "audit_polygon_bootstrap_rmse_interval_95": [
+    0.05062673509171245,
+    0.06369053720079908
+  ]
+}

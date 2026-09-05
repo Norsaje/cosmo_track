@@ -1,0 +1,176 @@
+[project]
+name = "cosmo-track"
+version = "0.1.0"
+description = "Веб-сервис мониторинга вегетационной динамики: NDVI, восстановление пропусков, детекция негативных аномалий (Космохакатон, кейс «Агропульс»)"
+requires-python = ">=3.11,<3.12"
+
+# Базовые зависимости намеренно лёгкие: `import veg_recovery` обязан работать
+# без torch, GDAL и клиентов БД — это проверяют offline smoke-тесты.
+dependencies = [
+    "pydantic>=2.7",
+    # Верхние границы поставлены под фактический C-04: ML обучал на pandas 2.3.3 и
+    # numpy 2.0.2, а pickle обученной модели и feature builder завязаны на их поведение.
+    # pandas 3.0 — мажорная смена семантики (copy-on-write, dtypes), проверять её на
+    # демо-пути мы не готовы. Снятие границы требует повторного
+    # `verify_handoff.py --full-inference`.
+    "pandas>=2.2,<3",
+    "numpy>=1.26,<3",
+]
+
+[project.optional-dependencies]
+# Стабильные имена extras: core / ml / dl / geo / web / dev.
+
+# Общая обвязка сервисного слоя: конфигурация, структурные логи, HTTP-клиент.
+core = [
+    "pydantic-settings>=2.2",
+    "structlog>=24.1",
+    "httpx>=0.27",
+    # tenacity нужен сервисному retry с backoff.
+    "tenacity>=8.2",
+    # Нужен pydantic.EmailStr: без него схема входа не строится вовсе — модуль
+    # падает при импорте, а не при первом запросе, и API просто не поднимается.
+    # Полноценная проверка адреса на границе бережёт лимит запросов внешнего
+    # IdP: очевидные опечатки отсекаются, не доходя до него.
+    "email-validator>=2.0",
+]
+
+# Зависимости ML соответствуют фактическому C-04:
+# `artifacts/ml/ndvi_backend_handoff_v1/requirements-runtime.txt`. Это уже не «каркас
+# для baseline» — без этих пакетов не загружается trained-бандл p0-catboost-gpu-v1.
+#
+# catboost импортируется лениво (`models/estimators.py:96`), но joblib десериализует
+# сам объект CatBoostRegressor, поэтому в рантайме инференса пакет обязателен.
+# Верхняя граница `<2` стоит намеренно: pickle обученной модели совместим не со всякой
+# версией, а мажорный апгрейд ломает загрузку молча, уже во время демо.
+#
+# ML зафиксировал точные версии обучающего окружения: numpy 2.0.2, pandas 2.3.3,
+# scipy 1.16.3, scikit-learn 1.6.1, pydantic 2.12.3, joblib 1.5.3, catboost 1.2.10.
+# Мы держим нижние границы, а точные версии фиксирует uv.lock; расхождение с
+# обучающим окружением проверяется прогоном verify_handoff.py --full-inference.
+ml = [
+    # Верхняя граница sklearn — не перестраховка, а воспроизведённый отказ:
+    # на 1.9.0 загрузка estimators.joblib падает
+    # `AttributeError: Can't get attribute '_RemainderColsList' on
+    # sklearn.compose._column_transformer`. Внутри пикла лежит ColumnTransformer,
+    # приватная структура которого между минорными версиями меняется.
+    # ML обучал на 1.6.1, поэтому держим ту же минорную серию.
+    "scikit-learn>=1.6,<1.7",
+    "catboost>=1.2,<2",
+    "joblib>=1.3",
+    "scipy>=1.11",
+    # lightgbm добавлен заменой модели (BE-011R): работающая смесь из `model/` —
+    # это два регрессора LightGBM (суммарный вес 0.42) и три спутниковых эксперта
+    # CatBoost. Без пакета pickle смеси не поднимается вовсе. Версия поставки —
+    # 4.7.0, верхняя граница `<5` по той же причине, что и у catboost: мажорный
+    # апгрейд ломает загрузку обученной модели молча, уже во время демо.
+    "lightgbm>=4.7,<5",
+]
+
+# DL-extra в offline CI не ставится: GPU там недоступен,
+# основной прогон идёт без этого extra.
+dl = [
+    "torch>=2.2",
+]
+
+# Геометрия и CRS. Растровый стек (rasterio/xarray/stackstac/exactextract)
+# добавляется в BE-007/BE-009, когда появятся provider-adapters, — сейчас он
+# не нужен и только утяжелил бы lock.
+geo = [
+    "shapely>=2.0",
+    "pyproj>=3.6",
+]
+
+# API, очередь и БД.
+web = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "celery>=5.4",
+    "redis>=5.0",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.1",
+    "geoalchemy2>=0.14",
+]
+
+# Инструменты разработки и проверок.
+dev = [
+    "pytest>=8.1",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.4",
+    "mypy>=1.9",
+    # matplotlib строит PNG для anomaly-кейсов и остаётся в dev, а не runtime core.
+    # В core он не попадает намеренно — базовый `import veg_recovery` обязан
+    # оставаться лёгким. Нижняя граница 3.8, а не проверенный DL 3.10.0: точная версия
+    # фиксируется lock-файлом, а зажимать её в extra значит ломать чужие окружения.
+    "matplotlib>=3.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/veg_recovery"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# Область проверки ограничена исходниками Python.
+include = ["*.py", "*.pyi"]
+extend-exclude = [
+    "docs/",
+    "data/",
+    # Ревизии Alembic генерируются автоматически: длинные строки с определениями
+    # колонок и порядок импортов там задаёт шаблон, а не мы. Форматировать их руками
+    # бессмысленно — следующий autogenerate вернёт всё обратно. Наш собственный
+    # migrations/env.py под линтером остаётся.
+    "migrations/versions/",
+    # Эти подсистемы сохраняют собственные правила форматирования.
+    "src/veg_recovery/contracts.py",
+    "src/veg_recovery/inference.py",
+    "src/veg_recovery/data/",
+    "src/veg_recovery/features/",
+    "src/veg_recovery/models/",
+    "src/veg_recovery/validation/",
+    "src/veg_recovery/cli/",
+    "src/veg_recovery/dl/",
+    "src/veg_recovery/anomalies/",
+    "artifacts/",
+    # reports/ — зона ML и DL (эксперименты, отчёты, построение графиков).
+    "reports/",
+    "scripts/",
+    "tests/tools/",
+    "tests/smoke/",
+    "tests/fixtures/",
+    "tests/dl/",
+    "tests/anomalies/",
+    "tests/ml/",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# В FastAPI вызов Query/Path/Depends в значении по умолчанию — штатный способ
+# объявить параметр, а не тот баг с мутабельным дефолтом, который ловит B008.
+extend-immutable-calls = ["fastapi.Query", "fastapi.Path", "fastapi.Body", "fastapi.Depends"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Тесты, которым нужна сеть или внешние credentials, помечаются маркером live
+# и по умолчанию не запускаются: основной CI полностью offline (инвариант 13).
+markers = [
+    "live: требует сети или внешних credentials; в offline CI не запускается",
+    # Полный parity C-04 считает 3 112 предсказаний CatBoost — около 33 секунд.
+    # В каждом прогоне это лишнее, но перед сдачей и перед демо запускать обязательно:
+    # `uv run pytest -q -m slow`.
+    "slow: длительная проверка (полный инференс на эталоне C-04)",
+]
+# --strict-markers обязателен: без него опечатка в имени маркера (livve вместо live)
+# проглатывается молча, и живой тест уходит в сеть прямо в offline CI.
+addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not live and not slow"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true

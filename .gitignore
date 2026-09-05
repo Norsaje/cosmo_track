@@ -1,0 +1,61 @@
+# macOS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Python bytecode, environments, and tool caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.venv/
+venv/
+env/
+.dl-venv/
+.uv-cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Secrets
+.env
+.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Jupyter temporary files
+.ipynb_checkpoints/
+
+# Local scratch directories
+/tmp/
+
+# Test scratch files
+tests/smoke/_tmp/
+
+# ML Kaggle packages and generated training results
+/artifacts/ml/kaggle/*.ipynb
+/artifacts/ml/kaggle/package_manifest.json
+/artifacts/ml/kaggle_ndvi_*.zip
+/artifacts/ml/kaggle_ndvi_*.zip.sha256
+/artifacts/ml/ndvi_project/
+/ndvi_trained_artifacts/
+/ndvi_trained_artifacts.zip
+/ndvi_tuned_artifacts/
+/ndvi_tuned_artifacts.zip
+/artifacts/ml/trained_gpu_v1/
+/artifacts/ml/tuned_gpu_v1/
+/artifacts/ml/**/*.sqlite3
+/artifacts/ml/**/cache/
+
+# DL generated training results
+/artifacts/dl/cv_tcn_v1/seed_*_fold_*/
+/artifacts/dl/kaggle_bundle/
+/artifacts/dl/kaggle_bundle.zip
