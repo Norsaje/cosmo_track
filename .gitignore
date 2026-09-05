@@ -25,3 +25,6 @@ Thumbs.db
 # uv (lockfile коммитим — uv.lock)
 # но временные метаданные не нужны
 .uv-cache/
+
+# Test scratch / smoke temp
+tests/smoke/_tmp/
