@@ -117,6 +117,77 @@ def learning_curves(run: Path) -> dict:
     return out
 
 
+def consolidate_partial(run: Path) -> dict:
+    """Сводит прерванный прогон: только фолды, где посчитаны все запрошенные seed.
+
+    Полный `cv_report.json` пишется в самом конце, поэтому остановленный прогон
+    иначе не оставил бы ничего, кроме локальных checkpoints. Режим засчитывается
+    завершённым только если в нём завершены все его фолды.
+    """
+    frames = []
+    for path in sorted(run.glob("seed_*_fold_*/oof.csv")):
+        seed = int(path.parent.name.split("seed_")[1].split("_fold")[0])
+        frames.append(pd.read_csv(path, parse_dates=["date"]).assign(seed_run=seed))
+    if not frames:
+        raise ValueError("Прогон не оставил ни одного завершённого фолда")
+    oof = pd.concat(frames, ignore_index=True)
+    seeds = sorted(int(v) for v in oof.seed_run.unique())
+    complete = [
+        fold
+        for fold, group in oof.groupby(["split", "fold"])
+        if sorted(int(v) for v in group.seed_run.unique()) == seeds
+    ]
+    kept = oof.loc[
+        pd.MultiIndex.from_frame(oof[["split", "fold"]]).isin(complete)
+    ].copy()
+    manifest = json.loads((run / "input_manifest.json").read_text(encoding="utf-8"))
+    planned = {(f["split"], f["fold"]) for f in manifest["folds"]}
+    per_split = {}
+    for split, group in kept.groupby("split"):
+        folds_done = {(split, f) for f in group.fold.unique()}
+        folds_planned = {f for f in planned if f[0] == split}
+        values = [
+            rmse(part.y_true, part.primary_ndvi_pred)
+            for _, part in group.groupby("seed_run")
+        ]
+        base = [
+            rmse(part.y_true, part.base_pred)
+            for _, part in group.groupby("seed_run")
+        ]
+        per_split[split] = {
+            "folds_complete": len(folds_done),
+            "folds_planned": len(folds_planned),
+            "split_complete": folds_done == folds_planned,
+            "rows_per_seed": int(len(group) / len(seeds)),
+            "dl_rmse_mean": float(np.mean(values)),
+            "dl_rmse_std": float(np.std(values)),
+            "dl_gap_score": gap_score(float(np.mean(values))),
+            "base_rmse_mean": float(np.mean(base)),
+            "ml_rmse": rmse(group.y_true, group.pred_ml)
+            if "pred_ml" in group
+            else None,
+        }
+    status = {
+        "kind": "interrupted_run_partial_summary",
+        "complete_cv": False,
+        "seeds": seeds,
+        "folds_complete": len(complete),
+        "folds_planned": len(planned),
+        "composite_rmse": None,
+        "composite_reason": "composite требует всех четырёх режимов A/B/C/D",
+        "splits": per_split,
+    }
+    for seed in seeds:
+        part = kept.loc[kept.seed_run.eq(seed)].drop(columns="seed_run")
+        part.to_csv(run / f"oof_partial_seed_{seed}.csv", index=False,
+                    lineterminator=chr(10))
+    (run / "partial_status.json").write_text(
+        json.dumps(status, ensure_ascii=False, indent=2, sort_keys=True) + chr(10),
+        encoding="utf-8",
+    )
+    return status
+
+
 def summarise(run: Path) -> dict:
     report = json.loads((run / "cv_report.json").read_text(encoding="utf-8"))
     manifest = json.loads((run / "input_manifest.json").read_text(encoding="utf-8"))
@@ -298,8 +369,24 @@ def main(argv=None):
     parser.add_argument("--baseline-oof", default="artifacts/dl/c03_derived/baseline_oof.csv.gz")
     parser.add_argument("--experiments", default="reports/dl_experiments.csv")
     parser.add_argument("--markdown", default=None)
+    parser.add_argument(
+        "--partial-only",
+        action="store_true",
+        help="Свести прерванный прогон: только фолды со всеми seed",
+    )
     args = parser.parse_args(argv)
     run = Path(args.run)
+    if args.partial_only or not (run / "cv_report.json").is_file():
+        status = consolidate_partial(run)
+        curves = learning_curves(run)
+        if curves:
+            (run / "learning_curves.json").write_text(
+                json.dumps(curves, ensure_ascii=False, indent=2, sort_keys=True)
+                + chr(10),
+                encoding="utf-8",
+            )
+        print(json.dumps(status, ensure_ascii=False, indent=2, default=float))
+        return 0
     summary = summarise(run)
     blend = {}
     baseline_path = Path(args.baseline_oof)

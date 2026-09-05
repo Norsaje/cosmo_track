@@ -7,25 +7,29 @@
 
 ## Шаг 1. Собрать входы локально
 
+**После слияния DL и ML** код лежит в одном дереве:
+
 ```powershell
-# 1. worktree опубликованной ветки ML (read-only источник C-01/C-03)
+$env:PYTHONPATH='src'
+python -m veg_recovery.dl.c03_bridge --ml-root . --output artifacts/dl/c03_derived
+python -m veg_recovery.dl.train --fold-manifest artifacts/dl/c03_derived/dl_c03.json --preflight-only
+python configs/dl/kaggle/package_dataset.py --ml-root .
+```
+
+**До слияния** источником C-01/C-03 служит отдельный read-only worktree ML:
+
+```powershell
 git worktree add --detach tmp/dl-review-ml origin/ML
-
-# 2. производный C-03 manifest: ключи, censoring и baseline OOF от ML
 $env:PYTHONPATH='src;tmp/dl-review-ml/src'
-python -m veg_recovery.dl.c03_bridge --ml-root tmp/dl-review-ml `
-  --output artifacts/dl/c03_derived
-
-# 3. проверка входов без torch и без обучения
-python -m veg_recovery.dl.train --fold-manifest artifacts/dl/c03_derived/dl_c03.json `
-  --preflight-only
-
-# 4. архив для Kaggle Dataset
+python -m veg_recovery.dl.c03_bridge --ml-root tmp/dl-review-ml --output artifacts/dl/c03_derived
+python -m veg_recovery.dl.train --fold-manifest artifacts/dl/c03_derived/dl_c03.json --preflight-only
 python configs/dl/kaggle/package_dataset.py --ml-root tmp/dl-review-ml
 ```
 
-Готово: `artifacts/dl/kaggle_bundle.zip` (`src_dl/`, `src_ml/`, `tests/`,
-`inputs/`, `BUNDLE_MANIFEST.json` с SHA256 каждого файла и точной командой).
+Готово: `artifacts/dl/kaggle_bundle.zip`. Внутри `tests/`, `inputs/` и
+`BUNDLE_MANIFEST.json` с SHA256 каждого файла, полем `layout` и точной командой
+прогона. Код лежит в `src/` для объединённого дерева либо в `src_dl/` и `src_ml/`
+до слияния; notebook читает `layout` и сам собирает PYTHONPATH.
 
 ## Шаг 2. Создать Kaggle Dataset
 

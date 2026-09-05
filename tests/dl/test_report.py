@@ -1,5 +1,7 @@
 """Отчётность: бленд выбирается вне оцениваемого фолда, gate остаётся fail-closed."""
 
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -105,3 +107,79 @@ def test_markdown_reports_every_mode_and_seed():
     assert "Composite" in text and "GapScore" in text
     for seed in (17, 42, 73):
         assert f"| {seed} |" in text
+
+
+def _partial_run(tmp_path, seeds=(17, 42)):
+    """Каталог прогона, где один фолд посчитан всеми seed, а второй — не всеми."""
+    manifest = {
+        "data": {"sha256": "0" * 64},
+        "fold_version": "TEST",
+        "mask_version": "TEST",
+        "folds": [
+            {"split": "matched", "fold": "f0"},
+            {"split": "matched", "fold": "f1"},
+            {"split": "unseen", "fold": "f0"},
+        ],
+    }
+    (tmp_path / "input_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    rng = np.random.default_rng(0)
+    written = []
+    for seed in seeds:
+        for split, fold in (("matched", "f0"), ("matched", "f1")):
+            truth = rng.normal(0.5, 0.1, 20)
+            frame = pd.DataFrame(
+                {
+                    "split": split,
+                    "fold": fold,
+                    "anon_polygon_id": [f"P{i % 4}" for i in range(20)],
+                    "date": pd.date_range("2020-04-01", periods=20),
+                    "y_true": truth,
+                    "primary_ndvi_pred": truth + rng.normal(0, 0.02, 20),
+                    "base_pred": truth + rng.normal(0, 0.05, 20),
+                }
+            )
+            directory = tmp_path / f"seed_{seed}_fold_{len(written)}"
+            directory.mkdir()
+            frame.to_csv(directory / "oof.csv", index=False)
+            written.append(directory)
+    # Второй seed не досчитал unseen: этот фолд не должен попасть в сводку.
+    truth = rng.normal(0.5, 0.1, 20)
+    directory = tmp_path / f"seed_{seeds[0]}_fold_9"
+    directory.mkdir()
+    pd.DataFrame(
+        {
+            "split": "unseen",
+            "fold": "f0",
+            "anon_polygon_id": [f"P{i % 4}" for i in range(20)],
+            "date": pd.date_range("2020-04-01", periods=20),
+            "y_true": truth,
+            "primary_ndvi_pred": truth,
+            "base_pred": truth,
+        }
+    ).to_csv(directory / "oof.csv", index=False)
+    return tmp_path
+
+
+def test_partial_summary_keeps_only_folds_with_every_seed(tmp_path):
+    from veg_recovery.dl.report import consolidate_partial
+
+    run = _partial_run(tmp_path)
+    status = consolidate_partial(run)
+    assert status["complete_cv"] is False
+    assert status["composite_rmse"] is None
+    assert status["folds_complete"] == 2 and status["folds_planned"] == 3
+    assert set(status["splits"]) == {"matched"}
+    assert status["splits"]["matched"]["split_complete"] is True
+    assert status["splits"]["matched"]["rows_per_seed"] == 40
+    for seed in (17, 42):
+        saved = pd.read_csv(run / f"oof_partial_seed_{seed}.csv")
+        assert set(saved.split) == {"matched"} and len(saved) == 40
+    assert json.loads((run / "partial_status.json").read_text(encoding="utf-8"))
+
+
+def test_partial_summary_needs_at_least_one_finished_fold(tmp_path):
+    from veg_recovery.dl.report import consolidate_partial
+
+    (tmp_path / "input_manifest.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError):
+        consolidate_partial(tmp_path)

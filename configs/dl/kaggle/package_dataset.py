@@ -1,9 +1,14 @@
 """Собирает автономный Kaggle Dataset для полного C-03 прогона DL.
 
-Внутрь кладутся три части с раздельным происхождением:
+Поддерживаются две раскладки. До слияния веток код лежит раздельно:
 
 * `src_dl/`  — код ветки DL (владелец: DL);
-* `src_ml/`  — код опубликованной ветки ML, read-only (владелец: ML);
+* `src_ml/`  — код опубликованной ветки ML, read-only (владелец: ML).
+
+После слияния DL и ML это одно дерево, и в архив идёт единственный `src/`.
+Раскладка записывается в `BUNDLE_MANIFEST.json` полем `layout`, notebook
+читает её оттуда и сам собирает PYTHONPATH.
+
 * `inputs/`  — производный C-03 manifest и ключи (`veg_recovery.dl.c03_bridge`).
 
 Ничего не скачивается из сети, скрытые test labels не попадают в архив:
@@ -26,12 +31,15 @@ import sys
 import zipfile
 
 SKIP = {"__pycache__", ".pytest_cache", ".ipynb_checkpoints"}
-RUN_COMMAND = (
-    "PYTHONPATH=src_dl:src_ml CUBLAS_WORKSPACE_CONFIG=:4096:8 "
-    "python -m veg_recovery.dl.train --fold-manifest inputs/dl_c03.json "
-    "--device cuda --seeds 17 42 73 --epochs 24 --epoch-policy fixed "
-    "--base-mode anchored --window 61 --output /kaggle/working/dl_tcn_run"
-)
+def run_command(layout: str) -> str:
+    path = "src" if layout == "merged" else "src_dl:src_ml"
+    return (
+        f"PYTHONPATH={path} CUBLAS_WORKSPACE_CONFIG=:4096:8 "
+        "python -m veg_recovery.dl.train --fold-manifest inputs/dl_c03.json "
+        "--device cuda --seeds 17 42 73 --epochs 16 --epoch-policy fixed "
+        "--base-mode anchored --batch-size 64 --window 61 "
+        "--output /kaggle/working/dl_tcn_run"
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -69,8 +77,12 @@ def build(ml_root, inputs, output, *, repo=".", archive=True):
     if output.exists():
         shutil.rmtree(output)
     output.mkdir(parents=True)
-    _copy_tree(repo / "src", output / "src_dl")
-    _copy_tree(ml_root / "src", output / "src_ml")
+    layout = "merged" if ml_root == repo else "split"
+    if layout == "merged":
+        _copy_tree(repo / "src", output / "src")
+    else:
+        _copy_tree(repo / "src", output / "src_dl")
+        _copy_tree(ml_root / "src", output / "src_ml")
     _copy_tree(repo / "tests", output / "tests")
     _copy_tree(inputs, output / "inputs")
     shutil.copyfile(repo / "configs/dl/tcn.yaml", output / "tcn.yaml")
@@ -81,12 +93,13 @@ def build(ml_root, inputs, output, *, repo=".", archive=True):
     payload = {
         "kind": "dl_kaggle_bundle",
         "schema_version": "dl-kaggle-bundle-0.1",
+        "layout": layout,
         "dl_commit": _commit(repo),
         "ml_commit": _commit(ml_root),
         "c03_review_status": json.loads(
             manifest_path.read_text(encoding="utf-8")
         )["review_status"],
-        "run_command": RUN_COMMAND,
+        "run_command": run_command(layout),
         "python": sys.version.split()[0],
         "files": {
             p.relative_to(output).as_posix(): _sha256(p)
@@ -98,7 +111,8 @@ def build(ml_root, inputs, output, *, repo=".", archive=True):
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    result = {"directory": str(output), "files": len(payload["files"])}
+    result = {"directory": str(output), "layout": layout,
+              "files": len(payload["files"])}
     if archive:
         zip_path = output.with_suffix(".zip")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as bundle:
