@@ -1,0 +1,142 @@
+# Демо-стенд BE-001: web, api, worker, postgres+postgis, redis.
+# Профиль mlflow намеренно вне дефолтного запуска (§8.11 ТЗ) и появится позже.
+# api и worker собираются из ОДНОГО Dockerfile и различаются только командой —
+# §8.1 ТЗ требует, чтобы они шли одной версией.
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cosmo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env — дефолтного пароля нет намеренно}
+      POSTGRES_DB: ${POSTGRES_DB:-cosmo}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cosmo} -d ${POSTGRES_DB:-cosmo}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cosmo-track-app:dev
+    restart: unless-stopped
+    # .env доезжает до контейнера: без env_file переменные из него участвуют только
+    # в интерполяции самого yaml, и заполненные credentials провайдеров никуда не попадают.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      COSMO_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cosmo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cosmo}
+      COSMO_REDIS_URL: redis://redis:6379/0
+      COSMO_MODEL_BUNDLE_PATH: /srv/model_bundle
+    volumes:
+      # Bundle от Разработчика 1 монтируется только на чтение. Путь задаётся переменной:
+      # каталог artifacts/ml/ — зона ML, и создавать его у себя мы не должны.
+      - ${MODEL_BUNDLE_HOST_PATH:-./infra/model_bundle}:/srv/model_bundle:ro
+      - cache:/srv/cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Адрес числом: `localhost` внутри контейнера резолвится в ::1, а uvicorn слушает
+      # только IPv4. Сейчас спасает фолбэк urllib на следующий адрес — полагаться на это
+      # не стоит, тем более что у web та же команда с wget уже давала Connection refused.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/live').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cosmo-track-app:dev
+    restart: unless-stopped
+    # Фиксированное имя узла: healthcheck обращается ровно к нему. Полагаться на
+    # раскрытие $HOSTNAME нельзя — exec-форма healthcheck выполняется без шелла.
+    command: ["celery", "-A", "apps.worker.celery_app:celery_app", "worker",
+              "--loglevel=info", "--concurrency=2", "-n", "backend-worker@cosmo"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      COSMO_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cosmo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cosmo}
+      COSMO_REDIS_URL: redis://redis:6379/0
+      COSMO_MODEL_BUNDLE_PATH: /srv/model_bundle
+    volumes:
+      - ${MODEL_BUNDLE_HOST_PATH:-./infra/model_bundle}:/srv/model_bundle:ro
+      - cache:/srv/cache
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "celery", "-A", "apps.worker.celery_app:celery_app", "inspect", "ping",
+             "-d", "backend-worker@cosmo", "-t", "10"]
+      interval: 15s
+      timeout: 15s
+      retries: 6
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      # Адрес числом, а не именем: healthcheck не должен зависеть от того,
+      # во что резолвится localhost внутри контейнера.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+volumes:
+  pgdata:
+  cache:

@@ -1,0 +1,24 @@
+# Граф знаний строится локально у каждого разработчика (решение по BE-001).
+graphify-out/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Секреты: в репозиторий попадает только .env.example с placeholder-ами (инвариант 11).
+.env
+.env.local
+*.pem
+*.key
+
+# Артефакты запуска
+.coverage
+htmlcov/
+dist/
+build/

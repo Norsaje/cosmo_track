@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>cosmo_track — мониторинг вегетационной динамики</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <style>
+    :root { color-scheme: light dark; --bg:#f6f7f9; --fg:#16181d; --muted:#5a6472; --line:#d8dde5; --card:#fff; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#14161a; --fg:#e8eaee; --muted:#98a2b3; --line:#2a2f38; --card:#1b1e24; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+           background:var(--bg); color:var(--fg); display:flex; flex-direction:column; height:100vh; }
+    header { padding:10px 16px; border-bottom:1px solid var(--line); background:var(--card);
+             display:flex; align-items:baseline; gap:12px; }
+    h1 { font-size:15px; margin:0; font-weight:600; }
+    .muted { color:var(--muted); font-size:12px; }
+    main { flex:1; display:grid; grid-template-columns:1fr 320px; min-height:0; }
+    #map { min-height:0; }
+    aside { border-left:1px solid var(--line); background:var(--card); padding:14px; overflow:auto; }
+    .row { display:flex; justify-content:space-between; gap:8px; padding:5px 0;
+           border-bottom:1px solid var(--line); }
+    .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+    .todo { margin-top:14px; padding:10px; border:1px dashed var(--line); border-radius:6px;
+            color:var(--muted); font-size:12px; }
+    @media (max-width:800px) { main { grid-template-columns:1fr; grid-template-rows:1fr auto; }
+                               aside { border-left:none; border-top:1px solid var(--line); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>cosmo_track</h1>
+    <span class="muted">скелет BE-001 — карта и статус сервисов</span>
+  </header>
+  <main>
+    <div id="map"></div>
+    <aside>
+      <strong>Состояние сервиса</strong>
+      <div id="health"><div class="row muted">запрашиваю…</div></div>
+      <div class="todo" id="tiles-note" hidden>
+        Тайлы карты не загружаются — нет доступа к сети. Это не отказ сервиса.
+      </div>
+      <div class="todo">
+        Рисование полигонов — BE-005, график ряда и панель аномалий — BE-013.
+        Сейчас это скелет: он подтверждает, что фронт доходит до API.
+        Вендоринг MapLibre и офлайн-тайлы — BE-014 (демо без сети).
+      </div>
+    </aside>
+  </main>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script>
+    // Порядок важен: панель состояния запрашивается ПЕРВОЙ и в отдельном блоке.
+    // MapLibre и тайлы тянутся из внешней сети; без неё `maplibregl` не определён,
+    // и если инициализация карты стоит выше, ReferenceError обрывает весь скрипт —
+    // страница выглядит мёртвой при полностью исправном API.
+    (function renderHealth() {
+      // Цвет — не единственный сигнал состояния: рядом всегда идёт текст (§8.9 ТЗ).
+      var COLOR = { ok: '#2e7d32', degraded: '#b8860b', down: '#c62828', not_configured: '#78849a' };
+      var box = document.getElementById('health');
+      fetch('/health/ready')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          box.innerHTML = Object.keys(data).map(function (key) {
+            var v = data[key];
+            return '<div class="row"><span>' + key + '</span><span>' +
+              '<span class="dot" style="background:' + (COLOR[v] || '#78849a') + '"></span>' +
+              v + '</span></div>';
+          }).join('');
+        })
+        .catch(function () {
+          box.innerHTML = '<div class="row">API недоступен — проверьте, поднят ли сервис</div>';
+        });
+    })();
+
+    (function renderMap() {
+      var host = document.getElementById('map');
+      // Отсутствие карты не должно ломать остальную страницу: офлайн-демо обязано
+      // показывать состояние сервиса и честно сообщать, что карта недоступна.
+      if (typeof maplibregl === 'undefined') {
+        host.innerHTML = '<div style="padding:16px;color:var(--muted)">' +
+          'Карта недоступна: библиотека MapLibre не загрузилась. ' +
+          'Скорее всего нет доступа к сети — сам сервис при этом работает, ' +
+          'состояние справа.</div>';
+        return;
+      }
+      try {
+        var map = new maplibregl.Map({
+          container: 'map',
+          style: {
+            version: 8,
+            sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                              tileSize: 256, attribution: '© OpenStreetMap' } },
+            layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+          },
+          center: [37.6, 55.75],
+          zoom: 4
+        });
+        map.addControl(new maplibregl.NavigationControl());
+        // Тайлы тоже внешние: отдельно сообщаем, если они не грузятся.
+        map.on('error', function () {
+          var note = document.getElementById('tiles-note');
+          if (note) { note.hidden = false; }
+        });
+      } catch (e) {
+        host.innerHTML = '<div style="padding:16px;color:var(--muted)">' +
+          'Карта не инициализировалась. Сервис при этом работает.</div>';
+      }
+    })();
+  </script>
+</body>
+</html>

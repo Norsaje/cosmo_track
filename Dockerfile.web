@@ -1,0 +1,19 @@
+FROM nginx:1.27-alpine
+
+COPY apps/web/index.html /usr/share/nginx/html/index.html
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Non-root (§8.11 ТЗ). Три вещи, без которых nginx под непривилегированным
+# пользователем не стартует, и каждая ловится только фактическим запуском:
+#   1. порт 8080 вместо 80 — порты ниже 1024 недоступны;
+#   2. pid-файл в /tmp — в образе он объявлен как /run/nginx.pid, куда uid 101 не пишет
+#      (директива именно `pid`, путь без /var — подстановка идёт по имени директивы,
+#      а не по literal-пути, иначе замена молча не срабатывает);
+#   3. каталоги кэша и временных файлов, принадлежащие nginx.
+RUN sed -i 's|^pid .*;|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf \
+    && sed -i 's|^user .*;|# user: контейнер уже работает под nginx|' /etc/nginx/nginx.conf \
+    && mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp \
+    && chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /etc/nginx/conf.d
+USER nginx
+
+EXPOSE 8080

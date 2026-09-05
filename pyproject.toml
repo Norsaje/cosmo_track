@@ -1,0 +1,132 @@
+[project]
+name = "cosmo-track"
+version = "0.1.0"
+description = "Веб-сервис мониторинга вегетационной динамики: NDVI, восстановление пропусков, детекция негативных аномалий (Космохакатон, кейс «Агропульс»)"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+
+# Базовые зависимости намеренно лёгкие: `import veg_recovery` обязан работать
+# без torch, GDAL и клиентов БД — на это опираются offline smoke-тесты (SH-005)
+# и требование «import базового пакета не требует torch» (docs/ed_part.md:358).
+dependencies = [
+    "pydantic>=2.7",
+    "pandas>=2.2",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# Имена extras заданы координацией (§9, SH-002) и менять их нельзя:
+# core / ml / dl / geo / web / dev.
+
+# Общая обвязка сервисного слоя: конфигурация, структурные логи, HTTP-клиент.
+core = [
+    "pydantic-settings>=2.2",
+    "structlog>=24.1",
+    "httpx>=0.27",
+    # tenacity назван в стеке ТЗ (§8.1) и нужен инварианту 9 (retry с backoff).
+    # Добавляем сейчас, пока handoff H-SH-002 в статусе REVIEW и переиздание бесплатно.
+    "tenacity>=8.2",
+]
+
+# Наполнение — зона Разработчика 1 (ML), здесь только то, без чего не собрать
+# baseline. Расширяется по его review (SH-002 reviewers: ML, DL).
+ml = [
+    "scikit-learn>=1.4",
+]
+
+# Наполнение — зона Разработчика 2 (DL). В offline CI не ставится: GPU нет,
+# основной прогон идёт без этого extra.
+dl = [
+    "torch>=2.2",
+]
+
+# Геометрия и CRS. Растровый стек (rasterio/xarray/stackstac/exactextract)
+# добавляется в BE-007/BE-009, когда появятся provider-adapters, — сейчас он
+# не нужен и только утяжелил бы lock.
+geo = [
+    "shapely>=2.0",
+    "pyproj>=3.6",
+]
+
+# API, очередь и БД.
+web = [
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.29",
+    "celery>=5.4",
+    "redis>=5.0",
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.1",
+    "geoalchemy2>=0.14",
+]
+
+# Инструменты разработки и проверок. Этим extra пользуется и Разработчик 4:
+# `uv sync --extra dev` + `uv run pytest -q tests/smoke tests/tools`.
+dev = [
+    "pytest>=8.1",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.4",
+    "mypy>=1.9",
+]
+
+# ВНИМАНИЕ: console-scripts `veg-recovery` и `batch` здесь намеренно НЕ объявлены.
+# Их точка входа — `src/veg_recovery/cli/batch.py`, это зона Разработчика 1 (ML),
+# модуля пока не существует. Регистрация скрипта на отсутствующий модуль сломала бы
+# `veg-recovery --help` в smoke-тестах Разработчика 4. Добавляем сразу после появления
+# CLI от ML — отдельным тикетом.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/veg_recovery"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# ruff умеет форматировать python-блоки внутри markdown. Нам это не нужно и опасно:
+# один прогон `ruff format .` переписал docs/BACKEND.md — файл в зоне teamlead.
+# Ограничиваем ruff исходниками и чужие зоны исключаем явно.
+include = ["*.py", "*.pyi"]
+extend-exclude = [
+    "*.md",
+    "docs/",
+    "data/",
+    "used_prompts/",
+    "graphify-out/",
+    # Зоны других разработчиков (§5 CLAUDE.md): линтуем и форматируем только своё.
+    "src/veg_recovery/dl/",
+    "src/veg_recovery/anomalies/",
+    "scripts/",
+    "tests/tools/",
+    "tests/smoke/",
+    "tests/fixtures/",
+    "tests/dl/",
+    "tests/anomalies/",
+    "tests/ml/",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# В FastAPI вызов Query/Path/Depends в значении по умолчанию — штатный способ
+# объявить параметр, а не тот баг с мутабельным дефолтом, который ловит B008.
+extend-immutable-calls = ["fastapi.Query", "fastapi.Path", "fastapi.Body", "fastapi.Depends"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Тесты, которым нужна сеть или внешние credentials, помечаются маркером live
+# и по умолчанию не запускаются: основной CI полностью offline (инвариант 13).
+markers = [
+    "live: требует сети или внешних credentials; в offline CI не запускается",
+]
+# --strict-markers обязателен: без него опечатка в имени маркера (livve вместо live)
+# проглатывается молча, и живой тест уходит в сеть прямо в offline CI.
+addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not live"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
