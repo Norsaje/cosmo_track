@@ -1,0 +1,4 @@
+-r requirements.txt
+optuna>=3.6,<5
+# Optional CPU alternative when --models lightgbm is requested:
+# lightgbm>=4,<5

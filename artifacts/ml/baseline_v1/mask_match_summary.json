@@ -1,0 +1,8 @@
+{
+  "n_A": 6000,
+  "known_fraction_A": 0.149,
+  "known_fraction_test": 0.14910025706940874,
+  "gap_length_total_variation_distance": 0.017911739502999145,
+  "month_total_variation_distance": 0.022338903170522714,
+  "source_proxy_note": "visible test only, true hidden sensor labels unavailable"
+}

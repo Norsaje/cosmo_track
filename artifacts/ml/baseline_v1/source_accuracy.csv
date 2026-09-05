@@ -1,0 +1,13 @@
+mode,source,n,accuracy,method
+A,landsat,2441,0.7300286767718148,empirical_context_uncalibrated
+A,modis,913,0.895947426067908,empirical_context_uncalibrated
+A,s2,2646,0.9232804232804233,empirical_context_uncalibrated
+B,landsat,2424,0.764026402640264,empirical_context_uncalibrated
+B,modis,983,0.9064089521871821,empirical_context_uncalibrated
+B,s2,2593,0.9355958349402237,empirical_context_uncalibrated
+C,landsat,384,1.0,empirical_context_uncalibrated
+C,modis,105,0.0,empirical_context_uncalibrated
+C,s2,711,0.0,empirical_context_uncalibrated
+D,landsat,55,0.8545454545454545,empirical_context_uncalibrated
+D,modis,34,1.0,empirical_context_uncalibrated
+D,s2,28,0.9642857142857143,empirical_context_uncalibrated

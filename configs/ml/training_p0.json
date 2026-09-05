@@ -1,0 +1,28 @@
+{
+  "models": ["catboost"],
+  "device": "gpu",
+  "seeds": [17, 29, 43, 71, 101],
+  "fold_version": "folds_v1",
+  "mask_version": "real_test_v1",
+  "feature_version": "ndvi-context-v1",
+  "composite_weights": {"A": 0.5, "B": 0.25, "C": 0.15, "D": 0.1},
+  "initial_optuna_trials": 30,
+  "fixed_parameter_reproduction_trials": 0,
+  "max_train_gaps": 6000,
+  "jobs": 2,
+  "clip": null,
+  "execution": "Kaggle GPU only; feature preparation and source classifier remain on CPU; no local estimator training was performed",
+  "status": "fixed_gpu_run_completed",
+  "completed_at": "2026-09-05T02:30:27.600556+00:00",
+  "result_path": "artifacts/ml/trained_gpu_v1",
+  "result": {
+    "catboost_cv_a_rmse": 0.06625592399004221,
+    "catboost_composite_rmse": 0.09956201797371964,
+    "ensemble_composite_rmse": 0.09741183557217524,
+    "ensemble_weights": {
+      "baseline": 0.30955022511781066,
+      "catboost": 0.6904497748821893
+    }
+  },
+  "tuning_status": "not_started"
+}

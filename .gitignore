@@ -1,0 +1,40 @@
+# macOS
+.DS_Store
+
+# Python bytecode and test/tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local Python environments and secrets
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Jupyter temporary files
+.ipynb_checkpoints/
+
+# Kaggle upload files. Rebuild them with artifacts/ml/package_kaggle.py.
+/artifacts/ml/kaggle/*.ipynb
+/artifacts/ml/kaggle/package_manifest.json
+/artifacts/ml/kaggle_ndvi_*.zip
+/artifacts/ml/kaggle_ndvi_*.zip.sha256
+/artifacts/ml/ndvi_project/
+
+# Downloaded/generated training results and model bundles
+/ndvi_trained_artifacts/
+/ndvi_trained_artifacts.zip
+/ndvi_tuned_artifacts/
+/ndvi_tuned_artifacts.zip
+/artifacts/ml/trained_gpu_v1/
+/artifacts/ml/tuned_gpu_v1/
+
+# Resumable tuning state
+/artifacts/ml/**/*.sqlite3
+/artifacts/ml/**/cache/

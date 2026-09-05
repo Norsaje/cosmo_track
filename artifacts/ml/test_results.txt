@@ -1,0 +1,25 @@
+test_harmonization_separate (test_ml.AnomalyTests.test_harmonization_separate) ... ok
+test_previous_years_negative_persistent_only (test_ml.AnomalyTests.test_previous_years_negative_persistent_only) ... ok
+test_blend_convex_and_no_worse (test_ml.BaselineTests.test_blend_convex_and_no_worse) ... ok
+test_interior_edge_length4_empty (test_ml.BaselineTests.test_interior_edge_length4_empty) ... ok
+test_raw_target_not_clipped (test_ml.BaselineTests.test_raw_target_not_clipped) ... ok
+test_bundle_manifest_hash_schema (test_ml.BundleAndCLITests.test_bundle_manifest_hash_schema) ... ok
+test_request_rejects_misaligned_mask_and_empty (test_ml.BundleAndCLITests.test_request_rejects_misaligned_mask_and_empty) ... ok
+test_strict_submission_and_cli_api_parity (test_ml.BundleAndCLITests.test_strict_submission_and_cli_api_parity) ... ok
+test_verified_trained_path_with_test_doubles (test_ml.BundleAndCLITests.test_verified_trained_path_with_test_doubles) ... ok
+test_current_controls (test_ml.DataTests.test_current_controls) ... ok
+test_duplicate_schema_nonfinite (test_ml.DataTests.test_duplicate_schema_nonfinite) ... ok
+test_exact_mask_and_no_mutation (test_ml.DataTests.test_exact_mask_and_no_mutation) ... ok
+test_hierarchy (test_ml.DataTests.test_hierarchy) ... ok
+test_deterministic_folds_past_and_hard (test_ml.LeakageAndFoldTests.test_deterministic_folds_past_and_hard) ... ok
+test_grouped_exclusion (test_ml.LeakageAndFoldTests.test_grouped_exclusion) ... ok
+test_same_date_excludes_polygon (test_ml.LeakageAndFoldTests.test_same_date_excludes_polygon) ... ok
+test_sentinel_all_dynamic (test_ml.LeakageAndFoldTests.test_sentinel_all_dynamic) ... ok
+test_gpu_factory_contract_without_fitting (test_ml.OfflineTrainingContractTests.test_gpu_factory_contract_without_fitting) ... ok
+test_pseudo_training_sentinel_without_fitting_models (test_ml.OfflineTrainingContractTests.test_pseudo_training_sentinel_without_fitting_models) ... ok
+test_requires_explicit_training_flag (test_ml.OfflineTrainingContractTests.test_requires_explicit_training_flag) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 4.376s
+
+OK
