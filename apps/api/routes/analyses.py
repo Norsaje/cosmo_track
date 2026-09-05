@@ -86,6 +86,22 @@ async def create_analysis(
     if polygon is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="полигон не найден")
 
+    # Ранняя проверка источника данных. Раньше полигон без привязки к ряду
+    # проходил дальше, джоба создавалась и падала NO_DATA_SOURCE через несколько
+    # секунд — пользователь узнавал о невозможности анализа уже постфактум, а в
+    # БД оставалась мёртвая запись. Живых провайдеров ещё нет (BE-007/BE-009),
+    # поэтому единственный источник — offline-ряд, и его отсутствие видно сразу.
+    if not polygon.anon_polygon_id:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "NO_DATA_SOURCE: у поля нет привязки к ряду наблюдений. "
+                "Спутниковые провайдеры ещё не подключены (BE-007/BE-009), поэтому "
+                "данные берутся из конкурсных рядов: выберите ряд в списке "
+                "GET /api/v1/reference-polygons и укажите его в properties.anon_polygon_id."
+            ),
+        )
+
     settings = get_settings()
     existing = db.execute(
         select(Analysis).where(

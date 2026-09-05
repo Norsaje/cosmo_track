@@ -56,6 +56,11 @@ EXPECTED_PATHS = {
     "/api/v1/polygons",
     "/api/v1/polygons/{polygon_id}",
     "/api/v1/field-search",
+    # Временный роут на время отсутствия живых провайдеров (BE-007/BE-009):
+    # перечень рядов, по которым offline-источник может дать данные. Он в списке
+    # намеренно — набор путей C-07 фиксируется явно, и появление роута мимо этого
+    # списка означало бы, что контракт расширили молча.
+    "/api/v1/reference-polygons",
     "/api/v1/analyses",
     "/api/v1/analyses/{analysis_id}",
     "/api/v1/analyses/{analysis_id}/series",
@@ -264,3 +269,61 @@ def test_polygon_list_envelope_is_consistent(client) -> None:
     assert set(body) == {"items", "total"}
     assert isinstance(body["items"], list)
     assert body["total"] >= len(body["items"])
+
+
+def test_reference_polygons_lists_available_series(client) -> None:
+    """Перечень рядов, по которым возможен анализ.
+
+    Без него интерфейс не может предложить источник данных, и пользователь узнаёт
+    о невозможности анализа только из упавшей джобы.
+    """
+    response = client.get("/api/v1/reference-polygons")
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {"items", "total"}
+    assert body["total"] == len(body["items"])
+    if body["items"]:
+        first = body["items"][0]
+        required = {"anon_polygon_id", "observations", "first_date", "last_date", "dataset"}
+        assert set(first) >= required
+        assert first["observations"] > 0
+        # Список отсортирован по длине ряда: демо на длинном ряду осмысленнее.
+        assert first["observations"] >= body["items"][-1]["observations"]
+
+
+def test_analysis_without_data_source_is_refused_before_any_job(client) -> None:
+    """Поле без привязки к ряду отвергается сразу, а не падающей джобой.
+
+    Раньше запрос принимался, создавалась запись анализа и джоба, воркер через
+    несколько секунд падал `NO_DATA_SOURCE`, а в БД оставалась мёртвая пара строк.
+    Пользователь при этом видел ошибку уже после ожидания.
+    """
+    created = client.post(
+        "/api/v1/polygons",
+        json={
+            "name": "Поле без ряда (тест)",
+            "source": "manual",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [[43.0, 48.0], [43.011, 48.0], [43.011, 48.008], [43.0, 48.008], [43.0, 48.0]]
+                ],
+            },
+        },
+    )
+    if created.status_code != 201:
+        pytest.skip("БД недоступна: тест требует поднятого PostgreSQL")
+    polygon_id = created.json()["id"]
+    try:
+        response = client.post(
+            "/api/v1/analyses",
+            json={"polygon_id": polygon_id, "date_from": "2024-04-01", "date_to": "2024-09-30"},
+        )
+        assert response.status_code == 422
+        body = response.json()
+        detail = body.get("detail", "") or body.get("message", "")
+        # Сообщение обязано называть причину и способ исправления, а не только код.
+        assert "NO_DATA_SOURCE" in detail
+        assert "reference-polygons" in detail
+    finally:
+        client.delete(f"/api/v1/polygons/{polygon_id}")

@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any, Literal
 
@@ -115,3 +115,29 @@ class FieldSearchResponse(BaseModel):
     #: Источники, которые фактически ответили. Пустой список — не ошибка,
     #: а валидное состояние «в этом bbox контуров не найдено» (UI обязан его показать).
     sources_queried: list[PolygonSource]
+
+
+class ReferenceSeries(BaseModel):
+    """Ряд, доступный offline-источнику данных (BE-008).
+
+    Появился из практики: нарисованный на карте контур сам по себе данных не имеет.
+    Геометрий в конкурсных CSV нет, сопоставить полигон с рядом автоматически
+    невозможно, а живых провайдеров ещё нет (BE-007/BE-009). Значит выбор ряда
+    делает человек — и обязан видеть, из чего выбирает, ДО запуска анализа.
+    """
+
+    anon_polygon_id: str
+    #: Сколько дней в ряду реально наблюдалось. Полигон с 900 наблюдениями и
+    #: полигон с 70 дают очень разное демо, и это должно быть видно в списке.
+    observations: int
+    first_date: date
+    last_date: date
+    crop_type: str | None = None
+    #: Из какого файла взят ряд. Часть провенанса: потребитель должен знать,
+    #: что источник офлайновый, а не живой провайдер.
+    dataset: str
+
+
+class ReferenceSeriesList(BaseModel):
+    items: list[ReferenceSeries]
+    total: int

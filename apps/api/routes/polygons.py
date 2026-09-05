@@ -23,6 +23,8 @@ from apps.api.schemas import (
     PolygonList,
     PolygonOut,
     PolygonSource,
+    ReferenceSeries,
+    ReferenceSeriesList,
 )
 from apps.db.models import Polygon
 from veg_recovery.geospatial.geometry import GeometryError, normalize
@@ -164,3 +166,37 @@ async def field_search(payload: FieldSearchRequest) -> FieldSearchResponse:
         status.HTTP_501_NOT_IMPLEMENTED,
         detail="Реализуется в BE-010 (fields_world → OSM → WorldCereal → ручной контур).",
     )
+
+
+@router.get("/reference-polygons", response_model=ReferenceSeriesList)
+async def list_reference_polygons() -> ReferenceSeriesList:
+    """Ряды, по которым сейчас возможен анализ.
+
+    Временный роут на время отсутствия живых провайдеров. Нарисованный контур
+    данных не несёт: геометрий в конкурсных CSV нет, и связать полигон с рядом
+    автоматически нельзя. Поэтому интерфейс предлагает выбрать ряд явно, а не
+    выясняет это через упавшую джобу спустя несколько секунд.
+
+    Когда появятся BE-007/BE-009, роут останется как список офлайн-источников
+    для демо без сети, но перестанет быть единственным способом получить данные.
+    """
+    from veg_recovery.providers.fixture import list_available_series
+
+    try:
+        series = list_available_series("data")
+    except (OSError, ValueError):
+        # Отсутствие CSV — не отказ сервиса: пустой список честнее ошибки, а
+        # интерфейс сам объяснит, что источников данных нет.
+        series = ()
+    items = [
+        ReferenceSeries(
+            anon_polygon_id=descriptor.anon_polygon_id,
+            observations=descriptor.observations,
+            first_date=descriptor.first_date,
+            last_date=descriptor.last_date,
+            crop_type=descriptor.crop_type,
+            dataset=descriptor.dataset,
+        )
+        for descriptor in series
+    ]
+    return ReferenceSeriesList(items=items, total=len(items))

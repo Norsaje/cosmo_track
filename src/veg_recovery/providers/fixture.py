@@ -75,6 +75,55 @@ def available_datasets(data_dir: str | Path = "data") -> list[Path]:
     return [path for path in (root / "train_dataset.csv", root / "test_data.csv") if path.is_file()]
 
 
+@dataclass(frozen=True)
+class SeriesDescriptor:
+    """Что offline-источник знает о полигоне до того, как его запросили."""
+
+    anon_polygon_id: str
+    observations: int
+    first_date: date
+    last_date: date
+    crop_type: str | None
+    dataset: str
+
+
+@lru_cache(maxsize=2)
+def list_available_series(data_dir: str = "data") -> tuple[SeriesDescriptor, ...]:
+    """Перечислить ряды, доступные offline-источнику.
+
+    Нужен интерфейсу: нарисованный на карте контур сам по себе не имеет данных —
+    геометрий в конкурсных CSV нет, сопоставить полигон с рядом автоматически
+    невозможно. Пока живых провайдеров нет (BE-007/BE-009), выбор ряда делает
+    человек, и он должен видеть, из чего выбирать.
+
+    Полигоны из train идут раньше: у них на порядок больше наблюдений (медиана
+    767 против 72), и демо на них выглядит осмысленнее.
+    """
+    seen: dict[str, SeriesDescriptor] = {}
+    for path in available_datasets(data_dir):
+        table = _load(str(path))
+        values = pd.to_numeric(table["primary_ndvi"], errors="coerce")
+        observed = table[values.notna()]
+        if observed.empty:
+            continue
+        grouped = observed.groupby("anon_polygon_id")
+        for polygon_id, group in grouped:
+            if polygon_id in seen:
+                # Полигон встречается и в train, и в test. Оставляем первую находку:
+                # порядок файлов задаёт `available_datasets`, train идёт первым.
+                continue
+            crop = group["crop_type"].dropna()
+            seen[polygon_id] = SeriesDescriptor(
+                anon_polygon_id=str(polygon_id),
+                observations=int(len(group)),
+                first_date=group["date"].min().date(),
+                last_date=group["date"].max().date(),
+                crop_type=str(crop.iloc[0]) if not crop.empty else None,
+                dataset=path.name,
+            )
+    return tuple(sorted(seen.values(), key=lambda item: (-item.observations, item.anon_polygon_id)))
+
+
 def load_series(
     anon_polygon_id: str,
     date_from: date,

@@ -94,6 +94,22 @@
         <div style="margin-top:6px"><button id="btn-finish" disabled>Завершить контур</button></div>
       </div>
 
+      <div id="save-form" class="note" hidden>
+        <strong>Сохранить поле</strong>
+        <label for="field-name">Название</label>
+        <input id="field-name" type="text" placeholder="Например: Поле №3" />
+        <label for="field-series">Ряд наблюдений</label>
+        <select id="field-series"></select>
+        <div class="muted" style="margin-top:4px">
+          Спутниковые провайдеры ещё не подключены, поэтому данные берутся из
+          конкурсных рядов. Без выбранного ряда анализ по полю выполнить нельзя.
+        </div>
+        <div style="margin-top:8px; display:flex; gap:6px">
+          <button class="primary" id="btn-save">Сохранить</button>
+          <button id="btn-save-cancel">Отмена</button>
+        </div>
+      </div>
+
       <strong>Поля</strong>
       <ul class="list" id="polygons"><li class="muted">загружаю…</li></ul>
 
@@ -133,6 +149,8 @@
       polygons: [],
       selected: null,
       draft: [],          // вершины рисуемого контура
+      pending: null,      // контур, ожидающий сохранения
+      reference: [],      // ряды, доступные offline-источнику
       drawing: false,
       map: null,
       poll: null,
@@ -257,6 +275,37 @@
       state.map.getSource("draft").setData({ type: "FeatureCollection", features });
     }
 
+    // ---------------------------------------------------------------- ряды данных
+    // Список подгружается заранее: выбор источника должен быть виден в момент
+    // сохранения поля, а не выясняться из упавшей джобы через несколько секунд.
+    async function loadReference() {
+      try {
+        const body = await (await api("/reference-polygons")).json();
+        state.reference = body.items || [];
+      } catch (error) {
+        state.reference = [];
+      }
+      const select = $("field-series");
+      select.innerHTML = "";
+      if (!state.reference.length) {
+        select.innerHTML = '<option value="">рядов нет — анализ будет недоступен</option>';
+        return;
+      }
+      select.innerHTML = '<option value="">— не привязывать (анализ будет недоступен) —</option>';
+      for (const item of state.reference) {
+        const option = document.createElement("option");
+        option.value = item.anon_polygon_id;
+        option.textContent = item.anon_polygon_id + " · " + item.observations + " набл. · " +
+          (item.crop_type || "культура не указана") + " · " +
+          item.first_date.slice(0, 4) + "–" + item.last_date.slice(0, 4);
+        select.appendChild(option);
+      }
+      // Первым по умолчанию — самый длинный ряд: демо на нём осмысленнее.
+      select.selectedIndex = 1;
+    }
+
+    const seriesOf = (polygon) => (polygon.properties || {}).anon_polygon_id || null;
+
     // ---------------------------------------------------------------- полигоны
     async function loadPolygons() {
       try {
@@ -281,10 +330,16 @@
         item.setAttribute("aria-selected", String(polygon.id === state.selected));
         const repaired = (polygon.validation_notes || []).length
           ? '<span class="badge" title="контур был исправлен сервером">исправлен</span>' : "";
+        const series = seriesOf(polygon);
+        // Отсутствие источника показывается прямо в списке, а не всплывает при
+        // запуске: поле без ряда проанализировать нельзя, и это свойство поля.
+        const source = series
+          ? '<span class="badge">' + escapeHtml(series) + "</span>"
+          : '<span class="badge" title="анализ недоступен">без данных</span>';
         item.innerHTML =
           "<div><strong>" + escapeHtml(polygon.name) + "</strong>" + repaired + "</div>" +
           '<div class="muted">' + polygon.area_ha.toFixed(1) + " га · " +
-          escapeHtml(polygon.crop_type || "культура не указана") + "</div>";
+          escapeHtml(polygon.crop_type || "культура не указана") + " " + source + "</div>";
         item.onclick = () => select(polygon.id);
         list.appendChild(item);
       }
@@ -294,22 +349,46 @@
       state.selected = id;
       renderPolygons();
       refreshMapData();
-      $("btn-analyse").disabled = false;
       $("btn-delete").disabled = false;
+
+      // Кнопка анализа блокируется заранее, если у поля нет источника данных.
+      // Раньше она была активна всегда, запрос уходил, джоба падала NO_DATA_SOURCE —
+      // пользователь узнавал о невозможности анализа спустя несколько секунд.
+      const polygon = state.polygons.find((item) => item.id === id);
+      const series = polygon ? seriesOf(polygon) : null;
+      $("btn-analyse").disabled = !series;
+      if (!series) {
+        showJob("У этого поля нет привязки к ряду наблюдений, поэтому анализ недоступен. " +
+                "Спутниковые провайдеры ещё не подключены, данные берутся из конкурсных " +
+                "рядов — создайте поле заново и выберите ряд в списке.", true);
+      } else {
+        $("job-status").hidden = true;
+      }
     }
 
-    async function createPolygon(ring) {
+    function askToSave(ring) {
+      state.pending = ring;
+      $("field-name").value = "Поле " + new Date().toLocaleDateString("ru-RU");
+      $("save-form").hidden = false;
+      $("field-name").focus();
+    }
+
+    async function createPolygon(ring, name, seriesId) {
       // Кольцо замыкается здесь, а не на сервере: GeoJSON требует совпадения первой
       // и последней точки, и незамкнутый контур сервер обязан отвергнуть.
       const closed = ring.concat([ring[0]]);
-      const name = prompt("Название поля", "Поле " + new Date().toLocaleDateString("ru-RU"));
-      if (name === null) return;
+      const chosen = state.reference.find((item) => item.anon_polygon_id === seriesId);
       const response = await api("/polygons", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: name || "Без названия",
           source: "manual",
+          // Культура берётся из выбранного ряда: модель требует crop_type даже на
+          // веб-пути, и брать его из другого источника, чем сам ряд, было бы
+          // рассогласованием данных.
+          crop_type: chosen ? chosen.crop_type : null,
+          properties: seriesId ? { anon_polygon_id: seriesId } : null,
           geometry: { type: "Polygon", coordinates: [closed] },
         }),
       });
@@ -629,10 +708,22 @@
       $("draw-hint").hidden = true;
       $("btn-cancel").disabled = true;
     };
-    $("btn-finish").onclick = async () => {
+    $("btn-finish").onclick = () => {
       const ring = state.draft.slice();
       $("btn-cancel").click();
-      if (ring.length >= 3) await createPolygon(ring);
+      if (ring.length >= 3) askToSave(ring);
+    };
+    $("btn-save").onclick = async () => {
+      const ring = state.pending;
+      const name = $("field-name").value;
+      const seriesId = $("field-series").value;
+      $("save-form").hidden = true;
+      state.pending = null;
+      if (ring) await createPolygon(ring, name, seriesId);
+    };
+    $("btn-save-cancel").onclick = () => {
+      $("save-form").hidden = true;
+      state.pending = null;
     };
     $("btn-delete").onclick = deleteSelected;
     $("btn-analyse").onclick = startAnalysis;
@@ -640,7 +731,7 @@
     renderHealth();
     setInterval(renderHealth, 15000);
     initMap();
-    loadPolygons();
+    loadReference().then(loadPolygons);
   })();
   </script>
 </body>

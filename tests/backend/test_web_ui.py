@@ -143,3 +143,27 @@ def test_script_has_no_obvious_syntax_break(page: str) -> None:
     script = page.split("<script>")[-1].rsplit("</script>", 1)[0]
     assert script.count("{") == script.count("}")
     assert script.count("(") == script.count(")")
+
+
+def test_data_source_is_chosen_before_saving_a_field(page: str) -> None:
+    """Ряд наблюдений выбирается при создании поля.
+
+    Геометрий в конкурсных CSV нет, автоматически связать нарисованный контур
+    с рядом невозможно, а живых провайдеров ещё нет. Значит выбор делает человек —
+    и делает его до сохранения, а не после падения анализа.
+    """
+    assert 'id="field-series"' in page
+    assert "/reference-polygons" in page
+    assert "Ряд наблюдений" in page
+
+
+def test_field_without_data_source_cannot_start_analysis(page: str) -> None:
+    """Кнопка анализа заблокирована, пока у поля нет источника данных.
+
+    Активная кнопка, ведущая к гарантированной ошибке через несколько секунд, —
+    это обещание, которое интерфейс не может выполнить.
+    """
+    assert "$(\"btn-analyse\").disabled = !series" in page
+    assert "анализ недоступен" in page
+    # В списке полей отсутствие источника видно сразу, а не только при выборе.
+    assert "без данных" in page

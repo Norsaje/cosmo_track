@@ -42,6 +42,8 @@ from .polygons import (
     PolygonList,
     PolygonOut,
     PolygonSource,
+    ReferenceSeries,
+    ReferenceSeriesList,
 )
 
 __all__ = [
@@ -67,6 +69,8 @@ __all__ = [
     "PolygonList",
     "PolygonOut",
     "PolygonSource",
+    "ReferenceSeries",
+    "ReferenceSeriesList",
     "ProviderHealth",
     "ProvenanceEntry",
     "ProvenanceResponse",
