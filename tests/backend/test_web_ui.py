@@ -284,50 +284,56 @@ def test_map_takes_the_whole_screen(page: str) -> None:
 
 
 def test_sheet_can_be_dragged(page: str) -> None:
-    """Меню открывается свайпом.
+    """Меню открывается свайпом справа налево.
 
-    Pointer-события, а не touch: та же логика работает мышью на десктопе и
-    стилусом, и не требует отдельной ветки кода.
+    Pointer-события, а не touch: та же логика работает мышью и стилусом и не
+    требует отдельной ветки кода. Жест начинается только от кромки экрана —
+    иначе он отбирал бы у карты обычное перетаскивание пальцем.
     """
     for handler in ("pointerdown", "pointermove", "pointerup", "pointercancel"):
         assert handler in page, handler
-    assert "setPointerCapture" in page
-    # Три положения: приоткрытое, среднее, полное.
-    assert '["peek", "half", "full"]' in page
+    assert "EDGE_ZONE" in page
+    assert "event.clientX >= width - EDGE_ZONE" in page
+    # Панель либо закрыта, либо открыта: промежуточных положений у боковой нет.
+    assert 'data-state="closed"' in page
+    assert 'sheet[data-state="open"]' in page
 
 
 def test_sheet_shows_it_can_be_dragged(page: str) -> None:
-    """Пользователь должен видеть, что панель тянется, не пробуя жест наугад.
+    """Пользователь должен видеть, что панель вытягивается, не пробуя жест наугад.
 
-    Три подсказки сразу: ручка-полоска, текст с направлением и стрелка,
-    переворачивающаяся при открытии. Жест, о котором нельзя догадаться,
-    для большинства не существует.
+    Жест, о котором нельзя догадаться, для большинства не существует, поэтому
+    подсказок две и они разного рода: язычок у той самой кромки, откуда тянуть,
+    и мини-меню внизу, которое вообще не требует жеста.
     """
-    assert ".sheet-grip::before" in page
-    assert "потяните вверх, чтобы открыть меню" in page
-    assert "потяните вниз, чтобы свернуть" in page
-    assert "sheet-nudge" in page
+    assert 'id="edge-hint"' in page
+    assert "потяните влево" in page
+    assert ".edge-hint::after" in page  # полоска-захват, как у ручки
+    assert 'class="dock"' in page
 
 
 def test_sheet_is_operable_without_gestures(page: str) -> None:
     """Жест не должен быть единственным способом.
 
-    Тап по ручке и клавиатура обязаны делать то же самое: свайп недоступен
-    и при работе со скринридером, и мышью на десктопе.
+    Свайп недоступен при работе со скринридером и неудобен мышью, поэтому то же
+    состояние достигается кнопками мини-меню, язычком, крестиком и касанием
+    затемнения.
     """
-    assert 'grip.addEventListener("click"' in page
-    assert 'grip.addEventListener("keydown"' in page
-    assert "ArrowUp" in page and "ArrowDown" in page
-    assert 'aria-expanded' in page
+    assert '$("edge-hint").addEventListener("click", openSheet)' in page
+    assert '$("dock-fields").addEventListener("click", openSheet)' in page
+    assert '$("dock-map").addEventListener("click", closeSheet)' in page
+    assert '$("sheet-close").addEventListener("click", closeSheet)' in page
+    assert '$("backdrop").addEventListener("click", closeSheet)' in page
 
 
-def test_scrolled_content_does_not_close_the_sheet(page: str) -> None:
-    """Тяга вниз по прокрученному тексту скроллит его, а не закрывает панель.
+def test_vertical_movement_belongs_to_the_content(page: str) -> None:
+    """Прокрутка внутри панели не должна её закрывать.
 
-    Иначе длинную таблицу аномалий невозможно дочитать: любое движение пальца
-    вниз схлопывало бы лист.
+    У боковой панели жест горизонтальный, а список внутри листается вертикально.
+    Без разделения по преобладающей оси любое движение пальца вверх по таблице
+    аномалий уводило бы панель за экран.
     """
-    assert "body.scrollTop > 0" in page
+    assert "Math.abs(dy) > Math.abs(dx)" in page
 
 
 def test_analysis_menu_appears_only_with_a_selected_field(page: str) -> None:
@@ -351,17 +357,38 @@ def test_drawing_controls_live_over_the_map(page: str) -> None:
     assert re.search(r'\.map-actions\s*\{[^}]*position:\s*absolute', page)
 
 
-def test_collapsed_sheet_shows_only_its_header(page: str) -> None:
-    """Из-под приоткрытой панели не должно выглядывать содержимое.
+def test_closed_sheet_is_fully_off_screen(page: str) -> None:
+    """Закрытая панель уходит за экран целиком.
 
-    Найдено на скриншоте: обрезанная карточка рядом с приглашением «потяните»
-    читается как недогрузившийся экран, а не как свёрнутая панель. Высота
-    приоткрытой части считается по фактической шапке, а содержимое дополнительно
-    скрывается — чтобы результат не зависел от точности вычислений.
-
-    Во время перетаскивания содержимое возвращается: человек должен видеть,
-    что именно он вытягивает.
+    Прежняя, нижняя, оставляла видимой шапку — и из-под неё выглядывала
+    обрезанная карточка, что читалось как недогрузившийся экран. У боковой
+    панели такого состояния нет вовсе: она либо открыта, либо её не видно,
+    а роль приглашения играет отдельный язычок.
     """
-    assert re.search(r'\.sheet\[data-state="peek"\]:not\(\[data-dragging="true"\]\) '
-                     r'\.sheet-body \{ visibility: hidden', page)
-    assert '$("sheet-grip").getBoundingClientRect().height' in page
+    assert re.search(r"\.sheet\s*\{[^}]*transform:\s*translateX\(100%\)", page)
+    assert re.search(r'\.sheet\[data-state="open"\]\s*\{\s*transform:\s*translateX\(0\)', page)
+
+
+def test_bottom_dock_offers_both_sections(page: str) -> None:
+    """Мини-меню внизу — вторая, безжестовая дорога к тем же состояниям.
+
+    Две вкладки, обе с иконкой и подписью: иконка без текста опознаётся не всеми,
+    а подпись без иконки хуже находится боковым зрением.
+    """
+    assert 'id="dock-map"' in page and 'id="dock-fields"' in page
+    # Подпись ищется внутри самой кнопки, а не где угодно на странице: слово
+    # «Поля» встречается и в заголовке карточки, и совпадение там ничего не значит.
+    dock_map = re.search(r'id="dock-map".*?</button>', page)
+    dock_fields = re.search(r'id="dock-fields".*?</button>', page)
+    assert dock_map and "Карта" in dock_map.group(0)
+    assert dock_fields and "Поля" in dock_fields.group(0)
+    assert "<svg" in dock_map.group(0) and "<svg" in dock_fields.group(0)
+    # Текущий раздел помечен состоянием, а не только цветом.
+    assert 'aria-selected' in page
+
+
+def test_brand_is_braining_space(page: str) -> None:
+    """Название и слоган продукта."""
+    assert "Braining Space" in page
+    assert "Думаем о вашем хозяйстве за вас" in page
+    assert "cosmo_track" not in page
