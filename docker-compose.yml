@@ -61,6 +61,10 @@ services:
       # Bundle от Разработчика 1 монтируется только на чтение. Путь задаётся переменной:
       # каталог artifacts/ml/ — зона ML, и создавать его у себя мы не должны.
       - ${MODEL_BUNDLE_HOST_PATH:-./infra/model_bundle}:/srv/model_bundle:ro
+      # Конкурсные CSV монтируются, а не копируются в образ: это 156 МБ, которые
+      # не меняются никогда, и класть их в каждый слой образа бессмысленно.
+      # Только чтение — data/*.csv неизменяемы по правилам проекта.
+      - ./data:/app/data:ro
       - cache:/srv/cache
     depends_on:
       postgres:
@@ -102,6 +106,10 @@ services:
       COSMO_MODEL_BUNDLE_PATH: /srv/model_bundle
     volumes:
       - ${MODEL_BUNDLE_HOST_PATH:-./infra/model_bundle}:/srv/model_bundle:ro
+      # Конкурсные CSV монтируются, а не копируются в образ: это 156 МБ, которые
+      # не меняются никогда, и класть их в каждый слой образа бессмысленно.
+      # Только чтение — data/*.csv неизменяемы по правилам проекта.
+      - ./data:/app/data:ro
       - cache:/srv/cache
     depends_on:
       redis:

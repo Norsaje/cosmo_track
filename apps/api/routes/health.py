@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -47,6 +48,25 @@ async def live() -> LiveResponse:
     return LiveResponse()
 
 
+@lru_cache(maxsize=4)
+def _engine_for(database_url: str):
+    """Engine для проверки конкретного URL.
+
+    Раньше здесь безусловно брался `get_engine()` — общий движок приложения,
+    собранный из настроек. Аргумент при этом игнорировался, и проверка всегда
+    ходила в основную БД, чем бы её ни просили проверить: health отвечал `ok`
+    даже для заведомо мёртвого адреса. Теперь совпадающий URL переиспользует
+    общий пул, а любой другой получает отдельный диагностический движок.
+    """
+    from sqlalchemy import create_engine
+
+    from apps.db.base import get_engine
+
+    if database_url == get_settings().database_url:
+        return get_engine()
+    return create_engine(database_url, pool_pre_ping=True, connect_args={"connect_timeout": 2})
+
+
 def _database_status(database_url: str) -> ComponentStatus:
     """Проверка БД реальным запросом, а не наличием строки подключения.
 
@@ -59,9 +79,7 @@ def _database_status(database_url: str) -> ComponentStatus:
     try:
         from sqlalchemy import text
 
-        from apps.db.base import get_engine
-
-        with get_engine().connect() as connection:
+        with _engine_for(database_url).connect() as connection:
             connection.execute(text("SELECT 1"))
             applied = connection.execute(
                 text("SELECT count(*) FROM alembic_version")

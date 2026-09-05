@@ -250,7 +250,17 @@ def test_export_csv_is_not_declared_as_json(schema) -> None:
     assert "text/csv" in content["content"]
 
 
-def test_empty_polygon_list_is_a_valid_state(client) -> None:
+def test_polygon_list_envelope_is_consistent(client) -> None:
+    """Список полигонов — всегда конверт `{items, total}`, и `total` согласован.
+
+    Прежняя редакция требовала буквально пустого списка: это описывало заглушку
+    BE-001, а не контракт. После BE-004 роут ходит в БД, и содержимое зависит от
+    состояния стенда — но форма ответа и согласованность `total` обязаны держаться
+    при любом содержимом, включая пустое.
+    """
     response = client.get("/api/v1/polygons")
     assert response.status_code == 200
-    assert response.json() == {"items": [], "total": 0}
+    body = response.json()
+    assert set(body) == {"items", "total"}
+    assert isinstance(body["items"], list)
+    assert body["total"] >= len(body["items"])
