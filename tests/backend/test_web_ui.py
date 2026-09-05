@@ -23,11 +23,19 @@ pytestmark = pytest.mark.skipif(not INDEX.is_file(), reason="нет apps/web/ind
 
 @pytest.fixture(scope="module")
 def page() -> str:
-    return INDEX.read_text(encoding="utf-8")
+    """Разметка с нормализованными пробелами.
+
+    Проверяются формулировки, а не вёрстка: одна и та же фраза в HTML легко
+    оказывается разбитой переносом строки при переформатировании. Схлопывание
+    пробелов оставляет тест про смысл — иначе он ломается от любой правки отступов
+    и вынуждает верстать под тест вместо того, чтобы верстать читаемо.
+    """
+    raw = INDEX.read_text(encoding="utf-8")
+    return re.sub(r"\s+", " ", raw)
 
 
 @pytest.fixture(scope="module")
-def visible(page: str) -> str:
+def visible() -> str:
     """Страница без JS-комментариев.
 
     Запреты вида «не подписывать интервал процентом» проверяются по тому, что
@@ -35,7 +43,8 @@ def visible(page: str) -> str:
     намеренно — как пример того, чего делать нельзя, — и считать её нарушением
     значит заставить документацию коверкать собственные слова.
     """
-    return re.sub(r"^\s*//.*$", "", page, flags=re.MULTILINE)
+    raw = INDEX.read_text(encoding="utf-8")
+    return re.sub(r"\s+", " ", re.sub(r"^\s*//.*$", "", raw, flags=re.MULTILINE))
 
 
 def test_required_controls_exist(page: str) -> None:
@@ -112,10 +121,16 @@ def test_chart_axis_is_not_clamped_to_physical_range(page: str) -> None:
     """Ось Y строится по данным, а не по [-1, 1].
 
     Реальный target выходит за физический диапазон (train до −2.13, test до 1.84);
-    жёсткая обрезка спрятала бы часть ряда.
+    жёсткая обрезка спрятала бы часть ряда. Проверяется поведение кода, а не
+    формулировка комментария: комментарий можно переписать, а зажатая ось —
+    это молчаливая потеря данных на графике.
     """
-    assert "выходит за физический диапазон" in page
     assert "minValue" in page and "maxValue" in page
+    # Границы вычисляются из значений ряда.
+    assert "Math.min.apply" in page and "Math.max.apply" in page
+    # И нигде не подставляются константы физического диапазона.
+    assert not re.search(r"minValue\s*=\s*-?1(\.0)?\b", page)
+    assert not re.search(r"maxValue\s*=\s*1(\.0)?\b", page)
 
 
 def test_map_failure_degrades_without_breaking_analysis(page: str) -> None:
@@ -140,7 +155,8 @@ def test_script_has_no_obvious_syntax_break(page: str) -> None:
     Не заменяет разбор JS, но ловит обрыв файла и незакрытый блок — самую частую
     поломку при ручной правке большого inline-скрипта.
     """
-    script = page.split("<script>")[-1].rsplit("</script>", 1)[0]
+    raw = INDEX.read_text(encoding="utf-8")
+    script = raw.split("<script>")[-1].rsplit("</script>", 1)[0]
     assert script.count("{") == script.count("}")
     assert script.count("(") == script.count(")")
 

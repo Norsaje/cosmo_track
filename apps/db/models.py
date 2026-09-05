@@ -286,6 +286,13 @@ class Reconstruction(Base):
     interval_level: Mapped[float | None] = mapped_column(Float)
     harmonization_status: Mapped[str | None] = mapped_column(String(64))
 
+    #: Климатическая норма для этой даты. ТЗ §8.9 требует её на графике как
+    #: нейтральную линию: без неё отклонение не с чем сопоставить глазом, а
+    #: `min_robust_z` из события аномалии остаётся числом без визуального смысла.
+    #: Модели она не передаётся — на реальной gap-строке её не существует.
+    climatology_mean: Mapped[float | None] = mapped_column(Float)
+    climatology_std: Mapped[float | None] = mapped_column(Float)
+
     __table_args__ = (
         UniqueConstraint("analysis_id", "date", name="uq_reconstruction_key"),
         Index("ix_reconstructions_analysis_date", "analysis_id", "date"),

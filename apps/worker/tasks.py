@@ -175,6 +175,8 @@ def _store_outcome(session, analysis_id: str, outcome: AnalysisOutcome) -> None:
                 interval_status=diagnostics.get("interval_status"),
                 interval_level=diagnostics.get("interval_level"),
                 harmonization_status=diagnostics.get("harmonization_status"),
+                climatology_mean=point.climatology_mean,
+                climatology_std=point.climatology_std,
             )
         )
 
@@ -311,7 +313,7 @@ def run_analysis(self, job_id: str) -> dict[str, Any]:  # noqa: ANN001 - сиг�
             _store_observations(session, polygon_id, series)
 
         _advance(job_id, JobState.RECONSTRUCTING)
-        outcome = run_reconstruction(series.frame, get_reconstructor())
+        outcome = run_reconstruction(series.frame, get_reconstructor(), context=series.context)
 
         _advance(job_id, JobState.ANALYZING)
         warnings = list(outcome.warnings)

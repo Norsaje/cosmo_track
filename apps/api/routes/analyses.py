@@ -184,6 +184,8 @@ async def get_series(analysis_id: str, db: Session = Depends(get_db)) -> SeriesR
             method=row.method,
             selected_source=row.selected_source,
             qa_flags={"quality_flags": row.quality_flags} if row.quality_flags else None,
+            ndvi_climatology_mean=row.climatology_mean,
+            ndvi_climatology_std=row.climatology_std,
         )
         for row in rows
     ]

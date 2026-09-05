@@ -34,6 +34,10 @@ class SeriesPointRecord:
     upper: float | None = None
     method: str | None = None
     diagnostics: dict[str, Any] = field(default_factory=dict)
+    #: Климатическая норма даты. Модели не передаётся (на скрытой строке её нет),
+    #: но UI без неё не может показать, насколько значение отклонилось от обычного.
+    climatology_mean: float | None = None
+    climatology_std: float | None = None
 
 
 @dataclass(frozen=True)
@@ -64,6 +68,7 @@ def build_gap_mask(frame: pd.DataFrame) -> pd.Series:
 def run_reconstruction(
     frame: pd.DataFrame,
     reconstructor: LoadedReconstructor,
+    context: pd.DataFrame | None = None,
 ) -> AnalysisOutcome:
     """Восстановить пропуски суточного ряда и собрать итоговую серию.
 
@@ -99,6 +104,18 @@ def run_reconstruction(
         for row in result.diagnostics.to_dict("records"):
             diagnostics[pd.Timestamp(row["date"]).normalize()] = row
 
+    # Климатология берётся из отдельного кадра: в кадр модели она не входит
+    # намеренно, но графику нужна. Индексируется по дате, а не по позиции —
+    # контекст может прийти в другом порядке или с иным набором строк.
+    climatology: dict[pd.Timestamp, tuple[float | None, float | None]] = {}
+    if context is not None and not context.empty and "date" in context.columns:
+        for row in context.to_dict("records"):
+            moment = pd.Timestamp(row["date"]).normalize()
+            climatology[moment] = (
+                _finite(row.get("ndvi_climatology_mean")),
+                _finite(row.get("ndvi_climatology_std")),
+            )
+
     points: list[SeriesPointRecord] = []
     for position in range(len(work)):
         moment = pd.Timestamp(work.loc[position, "date"]).normalize()
@@ -125,6 +142,8 @@ def run_reconstruction(
                 upper=float(prediction["upper"]) if is_reconstructed else None,
                 method=str(prediction["method"]) if is_reconstructed else None,
                 diagnostics=_clean_diagnostics(diagnostic),
+                climatology_mean=climatology.get(moment, (None, None))[0],
+                climatology_std=climatology.get(moment, (None, None))[1],
             )
         )
 
@@ -140,6 +159,14 @@ def run_reconstruction(
         observed_count=int(observed.sum()),
         warnings=warnings,
     )
+
+
+def _finite(value: Any) -> float | None:
+    """Число или None. NaN климатологии — это «нормы нет», а не ноль."""
+    if value is None:
+        return None
+    number = float(value)
+    return number if np.isfinite(number) else None
 
 
 def _clean_diagnostics(row: dict[str, Any]) -> dict[str, Any]:
