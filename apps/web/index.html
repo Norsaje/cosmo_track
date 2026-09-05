@@ -452,6 +452,8 @@
       <button id="btn-draw" class="btn-sm">Нарисовать поле</button>
       <button id="btn-cancel" class="btn-sm btn-bordered" hidden>Отмена</button>
       <button id="btn-finish" class="btn-sm btn-primary" hidden disabled>Завершить контур</button>
+      <button id="btn-basemap" class="btn-sm" type="button" aria-pressed="false"
+              title="Переключить подложку">Спутник</button>
     </div>
 
     <div class="backdrop" id="backdrop" data-visible="false" aria-hidden="true"></div>
@@ -566,6 +568,7 @@
       // перерисовывается при каждом выборе, и вместе с ней пересоздаются input —
       // без этого выбранные даты сбрасывались бы к значениям по умолчанию.
       dateFrom: "2024-04-01", dateTo: "2024-09-30",
+      satellite: false,
     };
 
     const $ = (id) => document.getElementById(id);
@@ -736,11 +739,31 @@
           "анализ, график и таблицы работают — недоступна только карта.");
         return;
       }
+      // Две подложки. Схема нужна, чтобы ориентироваться по дорогам и посёлкам;
+      // спутник — чтобы увидеть само поле: границы участков на схеме не нарисованы,
+      // и обвести контур по ней невозможно.
+      //
+      // У Esri порядок координат {z}/{y}/{x}, а не {z}/{x}/{y}. Перепутать их —
+      // получить мозаику из чужих мест, которая выглядит правдоподобно и потому
+      // особенно опасна: человек обведёт «своё» поле в другой области.
       const map = new maplibregl.Map({
         container: "map",
-        style: { version: 8, sources: { osm: { type: "raster",
-          tiles: [location.origin + "/tiles/{z}/{x}/{y}.png"], tileSize: 256,
-          attribution: "© OpenStreetMap" } }, layers: [{ id: "osm", type: "raster", source: "osm" }] },
+        style: { version: 8,
+          sources: {
+            osm: { type: "raster", tiles: [location.origin + "/tiles/{z}/{x}/{y}.png"],
+                   tileSize: 256, attribution: "© OpenStreetMap" },
+            satellite: { type: "raster", tiles: [location.origin + "/tiles-sat/{z}/{y}/{x}"],
+                         tileSize: 256, maxzoom: 19,
+                         attribution: "© Esri, Maxar, Earthstar Geographics" },
+          },
+          layers: [
+            { id: "osm", type: "raster", source: "osm" },
+            // Спутник лежит выше схемы и включается прозрачностью: пересоздавать
+            // стиль на каждое переключение значило бы терять уже загруженные
+            // тайлы и слои с контурами полей.
+            { id: "satellite", type: "raster", source: "satellite",
+              paint: { "raster-opacity": 0 } },
+          ] },
         center: [39.5, 45.5], zoom: 7,
       });
       state.map = map;
@@ -780,6 +803,19 @@
                    "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
         refreshMapData();
       });
+
+      $("btn-basemap").onclick = () => {
+        state.satellite = !state.satellite;
+        map.setPaintProperty("satellite", "raster-opacity", state.satellite ? 1 : 0);
+        $("btn-basemap").textContent = state.satellite ? "Схема" : "Спутник";
+        $("btn-basemap").setAttribute("aria-pressed", String(state.satellite));
+        // Контуры полей рисуются поверх подложки, но на снимке синяя заливка
+        // читается хуже, чем на светлой схеме: добавляем контраст обводке.
+        if (map.getLayer("fields-line")) {
+          map.setPaintProperty("fields-line", "line-width",
+            ["case", ["get", "selected"], state.satellite ? 4 : 3, state.satellite ? 2.5 : 1.5]);
+        }
+      };
 
       map.on("click", (event) => {
         if (state.drawing) {
@@ -1433,6 +1469,9 @@
     // пустую карту с просьбой «найди сам».
     function applyHash() {
       const hash = location.hash;
+      // Подложка тоже адресуема: ссылка «посмотри это поле на снимке» должна
+      // открывать именно снимок, а не схему с просьбой переключить самому.
+      if (hash.indexOf("sat") >= 0 && !state.satellite && state.map) $("btn-basemap").click();
       if (hash.indexOf("#field=") === 0) {
         openSheet();
         const id = decodeURIComponent(hash.slice(7));

@@ -34,7 +34,8 @@ COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 #   3. каталоги кэша и временных файлов, принадлежащие nginx.
 RUN sed -i 's|^pid .*;|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf \
     && sed -i 's|^user .*;|# user: контейнер уже работает под nginx|' /etc/nginx/nginx.conf \
-    && mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp /var/cache/nginx/tiles \
+    && mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp \
+         /var/cache/nginx/tiles /var/cache/nginx/tiles-sat \
     && chown -R nginx:nginx /usr/share/nginx/html /var/cache/nginx /etc/nginx/conf.d
 USER nginx
 

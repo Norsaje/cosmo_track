@@ -451,3 +451,59 @@ def test_brand_is_braining_space(page: str) -> None:
     assert "Braining Space" in page
     assert "Думаем о вашем хозяйстве за вас" in page
     assert "cosmo_track" not in page
+
+
+NGINX = INDEX.parent / "nginx.conf"
+
+
+def test_satellite_basemap_is_available(page: str) -> None:
+    """Есть вторая подложка — снимок.
+
+    По схеме границы участков не нарисованы, и обвести контур поля по ней
+    невозможно: ориентиры есть, самого поля нет.
+    """
+    assert "satellite" in page
+    assert "Спутник" in page and "Схема" in page
+    assert 'id="btn-basemap"' in page
+
+
+def test_esri_tiles_use_zyx_order(page: str) -> None:
+    """У Esri порядок координат {z}/{y}/{x}, а не {z}/{x}/{y}.
+
+    Это не педантизм: перепутанные оси дают мозаику из чужих мест, которая
+    выглядит правдоподобно — человек обведёт «своё» поле в другой области и
+    не заметит подмены.
+    """
+    assert "/tiles-sat/{z}/{y}/{x}" in page
+    # У схемы порядок обычный, и они не должны совпасть по недосмотру.
+    assert "/tiles/{z}/{x}/{y}.png" in page
+
+
+def test_satellite_attribution_is_kept(page: str) -> None:
+    """Атрибуция Esri обязательна по условиям использования их слоя."""
+    assert "Esri, Maxar, Earthstar Geographics" in page
+
+
+def test_basemap_switch_keeps_layers(page: str) -> None:
+    """Переключение меняет прозрачность, а не пересоздаёт стиль.
+
+    Пересоздание стиля выбрасывало бы уже загруженные тайлы и слои с контурами
+    полей — карта моргала бы и теряла выделение при каждом переключении.
+    """
+    assert 'setPaintProperty("satellite", "raster-opacity"' in page
+    # На снимке синяя заливка контуров читается хуже, чем на светлой схеме.
+    assert 'setPaintProperty("fields-line", "line-width"' in page
+
+
+def test_satellite_tiles_are_proxied_and_cached() -> None:
+    """Снимки идут через наш сервер, как и схема.
+
+    У браузера пользователя может не быть доступа наружу — на этом уже один раз
+    пропала подложка. Кэш отдельный: снимки в разы тяжелее схемы и в общей зоне
+    вытесняли бы её как раз тогда, когда нужны оба слоя.
+    """
+    config = NGINX.read_text(encoding="utf-8")
+    assert "location /tiles-sat/" in config
+    assert "proxy_cache tiles_sat;" in config
+    assert "keys_zone=tiles_sat" in config
+    assert "server.arcgisonline.com" in config
