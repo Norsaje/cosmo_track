@@ -263,8 +263,13 @@
       touch-action: pan-y;
     }
     /* В приоткрытом состоянии содержимое не перехватывает касания: иначе жест по
-       видимому краю списка скроллил бы его вместо открытия листа. */
+       видимому краю списка скроллил бы его вместо открытия листа. И оно скрыто
+       целиком: сколько бы ни выглянуло из-под среза, обрезанная карточка рядом
+       с приглашением «потяните» читается как недогрузившийся экран, а не как
+       свёрнутая панель. Во время перетаскивания содержимое возвращается —
+       пользователь должен видеть, что именно он вытягивает. */
     .sheet[data-state="peek"] .sheet-body { overflow: hidden; pointer-events: none; }
+    .sheet[data-state="peek"]:not([data-dragging="true"]) .sheet-body { visibility: hidden; }
 
     /* Первое появление: лист коротко «дышит», показывая, что он подвижен.
        Одноразово и только если пользователь не просил уменьшить анимации. */
@@ -527,11 +532,14 @@
 
     function sheetOffset(name) {
       const height = $("sheet").getBoundingClientRect().height || 1;
-      const peek = parseFloat(getComputedStyle(document.documentElement)
-        .getPropertyValue("--sheet-peek")) || 96;
       if (name === "full") return 0;
       if (name === "half") return Math.max(0, height * 0.45);
-      return Math.max(0, height - peek);
+      // Приоткрытая часть равна фактической высоте шапки, а не круглому числу
+      // из CSS: при другом размере шрифта или переносе заголовка фиксированные
+      // 96px оставляли снизу полоску содержимого, и приглашение «потяните»
+      // соседствовало с обрезанной карточкой.
+      const grip = $("sheet-grip").getBoundingClientRect().height || 96;
+      return Math.max(0, height - Math.ceil(grip));
     }
 
     function setSheet(name, options) {
@@ -558,6 +566,10 @@
       const body = $("sheet-body");
 
       if (!isMobile()) { sheet.style.transform = ""; return; }
+      // Переменная синхронизируется с фактической высотой шапки: по ней считается
+      // кадр подсказки-покачивания, иначе оно начиналось бы не из того положения.
+      document.documentElement.style.setProperty("--sheet-peek",
+        Math.ceil(grip.getBoundingClientRect().height) + "px");
       setSheet("peek");
 
       // Одноразовая подсказка движением: статичная ручка объясняет, что панель

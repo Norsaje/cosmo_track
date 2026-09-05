@@ -349,3 +349,19 @@ def test_drawing_controls_live_over_the_map(page: str) -> None:
     """
     assert 'class="map-actions"' in page
     assert re.search(r'\.map-actions\s*\{[^}]*position:\s*absolute', page)
+
+
+def test_collapsed_sheet_shows_only_its_header(page: str) -> None:
+    """Из-под приоткрытой панели не должно выглядывать содержимое.
+
+    Найдено на скриншоте: обрезанная карточка рядом с приглашением «потяните»
+    читается как недогрузившийся экран, а не как свёрнутая панель. Высота
+    приоткрытой части считается по фактической шапке, а содержимое дополнительно
+    скрывается — чтобы результат не зависел от точности вычислений.
+
+    Во время перетаскивания содержимое возвращается: человек должен видеть,
+    что именно он вытягивает.
+    """
+    assert re.search(r'\.sheet\[data-state="peek"\]:not\(\[data-dragging="true"\]\) '
+                     r'\.sheet-body \{ visibility: hidden', page)
+    assert '$("sheet-grip").getBoundingClientRect().height' in page
