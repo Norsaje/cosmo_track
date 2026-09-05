@@ -1,7 +1,7 @@
 # infra/instructions.lock — зафиксированное состояние инструкций команды.
 # Формат: <ref>\t<path>\t<blob-sha>. Обновляется ТОЛЬКО после актуализации
 # CLAUDE.md и used_prompts/backend_dev3_agent.md под новые инструкции.
-# Зафиксировано: 2026-09-05T09:59:08Z
+# Зафиксировано: 2026-09-05T18:56:34Z
 origin/DL	README.md	6019e6047ebb8e64bf89f47a0a07863de4b2c424
 origin/DL	docs/02_dl_developer.md	9e8c1fb09e1bc675447c551c78cea34e86c682dc
 origin/DL	docs/case_doc.pdf	1c9cc8dcc2485a03fc7680a903a2868578d15708
@@ -15,15 +15,20 @@ origin/ED	docs/ed_part.md	15689c682140b9a6c511687cf77262592b1c9364
 origin/ML	README.md	64bfeae121ffaf48b9aafbd8cc5b37a857fc9818
 origin/ML	docs/case_doc.pdf	1c9cc8dcc2485a03fc7680a903a2868578d15708
 origin/ML	docs/criteria.pdf	4e43cc39cc105bfdf646f15c5570db6f0be4b67f
-origin/backend	CLAUDE.md	1859b24d1cc58b5b3dd62cd792c27bc2ac3caf79
-origin/backend	README.md	f44e9208c59a7fdbc71ab8d79216387ab2cd7d81
+origin/backend	CLAUDE.md	03de24d6a72f5f8cadfbffe87372e24aa26aaf7b
+origin/backend	README.md	005cba694cadce726456a4b861b49194be1fb836
 origin/backend	docs/BACKEND.md	579d0a86c98505cd876762a6bc2dc0b126466059
-origin/backend	docs/api.md	e7441015d889f31efb99fb89c81f3af2ab52d302
+origin/backend	docs/api.md	d9aa6f468306e87486a4fcd5bf80e8c462af39aa
 origin/backend	docs/case_doc.pdf	1c9cc8dcc2485a03fc7680a903a2868578d15708
 origin/backend	docs/criteria.pdf	4e43cc39cc105bfdf646f15c5570db6f0be4b67f
-origin/backend	docs/handoffs/H-SH-002.md	eace189de511792979ede23135c4d2b763dcbdb0
-origin/backend	used_prompts/backend_dev3_agent.md	8937fe00f8237f4c9b6f7e766d6256cd5ff03fdb
-origin/backend	used_prompts/r&d.md	f289e8d96663a6cd47d423a21e9f236233f0d63b
+origin/backend	docs/handoffs/H-003-C04-acknowledgement.md	8b73e0a992f24a10011dc2c7f4269bdda037aa8d
+origin/backend	docs/handoffs/H-SH-002.md	0d41c10efae655113b84e9e535f6bca0e1aa3781
+origin/backend	docs/ml_solution.md	b0921738f9ec84ecbdc81c5cb14e7400297056c8
+origin/backend	used_prompts/backend_dev3_agent.md	69958e1f4071fdf7116c8eb41bf60467d70e6492
+origin/integration/dl-ml	README.md	cf047db54b4664b3d57311995b3939b3334fe0aa
+origin/integration/dl-ml	docs/02_dl_developer.md	9e8c1fb09e1bc675447c551c78cea34e86c682dc
+origin/integration/dl-ml	docs/case_doc.pdf	1c9cc8dcc2485a03fc7680a903a2868578d15708
+origin/integration/dl-ml	docs/criteria.pdf	4e43cc39cc105bfdf646f15c5570db6f0be4b67f
 origin/main	00_team_coordination.md	27771a08df90a806a8bce6bde458d8ed49f2e2db
 origin/main	README.md	f44e9208c59a7fdbc71ab8d79216387ab2cd7d81
 origin/main	docs/01_ml_developer.md	12978ccb45ed7cc3741ded047c9b9863065a76d3

@@ -182,69 +182,178 @@ def _store_outcome(session, analysis_id: str, outcome: AnalysisOutcome) -> None:
         )
 
 
-def _detect_anomalies(session, analysis: Analysis, series, outcome: AnalysisOutcome) -> list[str]:
-    """Аномалии baseline-детектором ML — разрешённый fallback до прихода C-09 от DL.
+def _selected_source(primary, s2, landsat, modis) -> str | None:
+    """Какой сенсор дал `primary_ndvi`: S2 → Landsat → MODIS (инвариант 4).
 
-    Возвращает предупреждения. Отсутствие событий при нехватке истории — **не**
-    подтверждённая норма: это отдельное состояние, и оно проговаривается явно,
-    как требует семантика C-09.
+    Источник определяется сверкой значения, а не правилом «первый непустой».
+    Иерархия подтверждена эмпирически, но подставить сенсор, которого в строке
+    нет, значило бы придумать провенанс. На поставке `model/` сверка сходится на
+    всех 30 520 видимых значениях без единого несовпадения, и распределение
+    важно для дальнейшего: 36.8 % S2, 43.5 % Landsat, 19.7 % MODIS.
+    """
+    if primary is None or pd.isna(primary):
+        return None
+    for name, value in (("s2", s2), ("landsat", landsat), ("modis", modis)):
+        if value is not None and pd.notna(value) and abs(float(value) - float(primary)) <= 1e-9:
+            return name
+    return None
+
+
+def _c09_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    """Кадр в том виде, в каком его принимает `SensorHarmonizer.transform` DL.
+
+    Собираем ровно требуемое: ключ, календарный день без таймзоны, культура,
+    сырой `primary_ndvi` и сенсорные ряды. Гармонизацию считает код DL, а не мы:
+    выдавать наш sensor mapping за гармонизацию их ТЗ прямо запрещает.
+    """
+    out = pd.DataFrame(
+        {
+            "anon_polygon_id": frame["anon_polygon_id"].astype(str),
+            "date": pd.to_datetime(frame["date"]).dt.normalize().dt.strftime("%Y-%m-%d"),
+            # crop_type у полигона постоянен, но в отдельных строках бывает пустым;
+            # без него `_validate` DL отвергает кадр целиком.
+            "crop_type": frame["crop_type"].ffill().bfill(),
+            "primary_ndvi": pd.to_numeric(frame["primary_ndvi"], errors="coerce"),
+        }
+    )
+    for column in ("s2_ndvi", "landsat_ndvi", "modis_ndvi"):
+        out[column] = (
+            pd.to_numeric(frame[column], errors="coerce")
+            if column in frame
+            else pd.Series(float("nan"), index=out.index)
+        )
+    out["selected_source"] = [
+        _selected_source(row["primary_ndvi"], row["s2_ndvi"], row["landsat_ndvi"], row["modis_ndvi"])
+        for row in out.to_dict("records")
+    ]
+    return out
+
+
+def _detect_with_c09(
+    analysis: Analysis, series, outcome: AnalysisOutcome, reference_frame: pd.DataFrame
+) -> tuple[list[AnomalyEvent], list[str]]:
+    """Контракт C-09 от DL: события, severity и пояснение считает их детектор.
+
+    Возвращает строки для БД и предупреждения. Ничего не пишет в сессию сам:
+    исключение из детектора не должно оставлять после себя половину событий.
+    """
+    from veg_recovery.anomalies.advanced import (
+        AdvancedAnomalyDetector,
+        AnomalyConfig,
+        SensorHarmonizer,
+    )
+    from veg_recovery.anomalies.events import SCHEMA_VERSION
+
+    # Одна калибровка на reference и query — дословное требование consumer review
+    # DL: смешивать в одном вызове детектора affine ML и pooling DL запрещено.
+    # Поэтому гармонизатор обучается на reference и им же преобразуются оба кадра.
+    harmonizer = SensorHarmonizer().fit(_c09_frame(reference_frame))
+
+    reference = harmonizer.transform(_c09_frame(reference_frame))
+    reference["is_observed"] = reference["primary_ndvi_raw"].notna()
+
+    query = harmonizer.transform(_c09_frame(series.frame))
+    # `is_observed` берётся из результата реконструкции, а не как отрицание
+    # `is_reconstructed`: естественный календарный NaN — не восстановленная точка.
+    observed_by_date = {point.date.date(): point.is_observed for point in outcome.points}
+    query_dates = pd.to_datetime(query["date"]).dt.date
+    query["is_observed"] = [
+        observed_by_date.get(moment, bool(pd.notna(value)))
+        for moment, value in zip(query_dates, query["primary_ndvi_raw"], strict=True)
+    ]
+
+    detector = AdvancedAnomalyDetector(AnomalyConfig()).fit(reference)
+    _points, result = detector.analyze(query)
+
+    rows = [
+        AnomalyEvent(
+            analysis_id=analysis.id,
+            start_date=event.start_date,
+            end_date=event.end_date,
+            # Категория приходит от производителя, а не собирается нами:
+            # normal / biomass_suppression / critical.
+            severity=event.severity,
+            score=event.score,
+            confidence=event.confidence,
+            min_robust_z=event.min_robust_z,
+            negative_area=event.negative_area,
+            observed_points=event.observed_points,
+            reconstructed_points=event.reconstructed_points,
+            # Список кодов открытый: Literal и CHECK по нему запрещены (§4.1).
+            reason_codes=list(event.reason_codes),
+            explanation_ru=event.explanation_ru,
+            # Версия алгоритма хранится обязательно: по ней различаются 0.1.0 и 0.1.1.
+            algorithm_version=event.algorithm_version,
+            schema_version=SCHEMA_VERSION,
+            duration_days=event.duration_days,
+        )
+        for event in result.events
+    ]
+
+    warnings = list(result.warnings)
+    # Почему восстановленные точки не участвуют в оценке: гармонизатор переводит
+    # значение сенсора в шкалу S2, а у предсказания сенсора нет. Объявить его
+    # «шкалой S2» было бы неверно для двух третей ряда — сырой `primary_ndvi`
+    # это S2 лишь на 36.8 %, остальное Landsat и MODIS. Мы предпочитаем
+    # недосказать, чем приписать восстановлению провенанс, которого у него нет.
+    reconstructed = sum(1 for point in outcome.points if point.is_reconstructed)
+    if reconstructed:
+        warnings.append(
+            "RECONSTRUCTED_POINTS_NOT_HARMONIZED: восстановленные моделью точки "
+            f"({reconstructed}) не участвуют в оценке событий — у предсказания нет "
+            "сенсора, а значит и калибровки в гармонизированной шкале"
+        )
+    return rows, warnings
+
+
+def _detect_with_baseline(
+    analysis: Analysis,
+    series,
+    outcome: AnalysisOutcome,
+    reference_frame: pd.DataFrame,
+    reason: str,
+) -> tuple[list[AnomalyEvent], list[str]]:
+    """Объявленный fallback BE-012: baseline-детектор ML, когда C-09 недоступен.
+
+    Схема baseline-детектора ML НЕ совпадает с C-09: у него `event_id`, `magnitude`,
+    числовой `severity` (magnitude × duration × confidence) и `interpretation`.
+    Поэтому поля переносятся явно, а не «как получится»: наивный маппинг положил бы
+    число 0.89 в колонку severity, где C-09 ожидает категорию.
+    Чего у baseline нет — того мы не выдумываем: min_robust_z и negative_area
+    остаются нулями, а не подставленными «правдоподобными» величинами.
     """
     from veg_recovery.anomalies.baseline import detect_anomalies
 
-    session.query(AnomalyEvent).filter(AnomalyEvent.analysis_id == analysis.id).delete()
-
-    harmonized = {point.date: point.ndvi_harmonized for point in outcome.points}
     query = series.frame.copy()
     query["date"] = pd.to_datetime(query["date"]).dt.normalize()
+    harmonized = {point.date: point.ndvi_harmonized for point in outcome.points}
     query["ndvi_harmonized"] = [
         harmonized.get(moment) if harmonized.get(moment) is not None else raw
         for moment, raw in zip(query["date"], query["primary_ndvi"], strict=True)
     ]
 
-    # Референс — только предыдущие годы того же полигона: сравнение с текущим годом
-    # было бы утечкой и превратило бы аномалию в самоподтверждение.
-    reference = load_series(
-        analysis.polygon.anon_polygon_id,
-        date(1900, 1, 1),
-        date(analysis.date_from.year - 1, 12, 31),
-        data_dir=get_settings().model_data_dir,
-    )
-    reference_frame = reference.frame.copy()
-    reference_frame["date"] = pd.to_datetime(reference_frame["date"]).dt.normalize()
-    reference_frame["ndvi_harmonized"] = reference_frame["primary_ndvi"]
-    reference_frame = reference_frame[reference_frame["ndvi_harmonized"].notna()]
+    baseline_reference = reference_frame.copy()
+    baseline_reference["ndvi_harmonized"] = baseline_reference["primary_ndvi"]
+    baseline_reference = baseline_reference[baseline_reference["ndvi_harmonized"].notna()]
 
-    years = reference_frame["date"].dt.year.nunique()
-    if years < MIN_REFERENCE_YEARS:
-        return [
-            "INSUFFICIENT_REFERENCE_YEARS: истории меньше "
-            f"{MIN_REFERENCE_YEARS} лет ({years}); отсутствие событий не означает норму"
-        ]
-
-    result = detect_anomalies(query, reference_frame=reference_frame)
-    events = result.events
+    events = detect_anomalies(query, reference_frame=baseline_reference).events
     warnings = [
         "ANOMALY_SOURCE_IS_BASELINE: события получены baseline-детектором ML, "
         "а не контрактом C-09 от DL; категории severity (normal/biomass_suppression/"
-        "critical) им не присваиваются"
+        f"critical) им не присваиваются. Причина отката: {reason}"
     ]
     if events.empty:
-        return warnings
+        return [], warnings
 
-    # Схема baseline-детектора ML НЕ совпадает с C-09: у него `event_id`, `magnitude`,
-    # числовой `severity` (magnitude × duration × confidence) и `interpretation`.
-    # Поэтому поля переносятся явно, а не «как получится»: наивный маппинг положил бы
-    # число 0.89 в колонку severity, где C-09 ожидает категорию.
-    # Чего у baseline нет — того мы не выдумываем: min_robust_z и negative_area
-    # остаются нулями, а не подставленными «правдоподобными» величинами.
     observed_dates = {point.date.date() for point in outcome.points if point.is_observed}
     reconstructed_dates = {point.date.date() for point in outcome.points if point.is_reconstructed}
 
+    rows = []
     for row in events.to_dict("records"):
         start = pd.Timestamp(row["start_date"]).date()
         end = pd.Timestamp(row["end_date"]).date()
         span = pd.date_range(start, end, freq="D").date
-        session.add(
+        rows.append(
             AnomalyEvent(
                 analysis_id=analysis.id,
                 start_date=start,
@@ -268,6 +377,47 @@ def _detect_anomalies(session, analysis: Analysis, series, outcome: AnalysisOutc
                 duration_days=int(row.get("duration_days", (end - start).days + 1)),
             )
         )
+    return rows, warnings
+
+
+def _detect_anomalies(session, analysis: Analysis, series, outcome: AnalysisOutcome) -> list[str]:
+    """Аномалии контрактом C-09 от DL; baseline ML остаётся объявленным fallback.
+
+    Возвращает предупреждения. Отсутствие событий при нехватке истории — **не**
+    подтверждённая норма: это отдельное состояние, и оно проговаривается явно,
+    как требует семантика C-09.
+    """
+    session.query(AnomalyEvent).filter(AnomalyEvent.analysis_id == analysis.id).delete()
+
+    # Референс — только предыдущие годы того же полигона: сравнение с текущим годом
+    # было бы утечкой и превратило бы аномалию в самоподтверждение.
+    reference = load_series(
+        analysis.polygon.anon_polygon_id,
+        date(1900, 1, 1),
+        date(analysis.date_from.year - 1, 12, 31),
+        data_dir=get_settings().model_data_dir,
+    )
+    reference_frame = reference.frame.copy()
+    reference_frame["date"] = pd.to_datetime(reference_frame["date"]).dt.normalize()
+
+    years = reference_frame.loc[reference_frame["primary_ndvi"].notna(), "date"].dt.year.nunique()
+    if years < MIN_REFERENCE_YEARS:
+        return [
+            "INSUFFICIENT_REFERENCE_YEARS: истории меньше "
+            f"{MIN_REFERENCE_YEARS} лет ({years}); отсутствие событий не означает норму"
+        ]
+
+    try:
+        rows, warnings = _detect_with_c09(analysis, series, outcome, reference_frame)
+    except Exception as error:  # noqa: BLE001 - откат на fallback важнее типа отказа
+        # Демо не должно падать из-за отказа детектора, но и молчать о подмене
+        # источника нельзя: причина отката уходит в предупреждение дословно.
+        rows, warnings = _detect_with_baseline(
+            analysis, series, outcome, reference_frame, reason=f"{type(error).__name__}: {error}"
+        )
+
+    for row in rows:
+        session.add(row)
     return warnings
 
 

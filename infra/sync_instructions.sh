@@ -24,7 +24,7 @@ LOCK="infra/instructions.lock"
 # models — ветка поставки обученной модели (C-04): её README_BACKEND.md и docs/ml_solution.md
 # адресованы нам напрямую. Она была пропущена в первой редакции и обнаружилась только
 # потому, что о ней сказал пользователь, — список веток ведём по факту `git ls-remote`.
-REFS=${INSTR_REFS:-"origin/main origin/backend origin/ML origin/DL origin/ED origin/models"}
+REFS=${INSTR_REFS:-"origin/main origin/backend origin/ML origin/DL origin/ED origin/models origin/integration/dl-ml"}
 # Что считается инструкцией: координационные файлы в корне, ролевые ТЗ и документы в docs/,
 # промпты и сам CLAUDE.md.
 PATTERN='^(CLAUDE\.md|AGENTS\.md|README\.md|[0-9]{2}_[^/]*\.md|[^/]*(coordination|instruction|prompt|task|spec)[^/]*\.md|docs/[^/]*\.(md|pdf)|docs/.*/[^/]*\.md|used_prompts/.*\.md|\.claude/.*\.md)$'
