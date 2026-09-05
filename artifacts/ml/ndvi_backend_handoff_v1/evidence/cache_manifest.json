@@ -1,0 +1,125 @@
+{
+  "spec": {
+    "fingerprints": {
+      "train": "a75e530d0fb51581ad6800f84b3875233778801491f02236917862faf9b424ec",
+      "test": "3c5c0e27eef8266bcf6dce09c9b556c073cee3902c065a94e4ea7a59edb00993",
+      "folds": "ba1ae945c43820d05bbcbdbf7faf2982c07cbd2ed59aa6fb0a53c3f25f3484a8"
+    },
+    "max_train_gaps": 6000,
+    "feature_version": "ndvi-context-v1"
+  },
+  "entries": [
+    {
+      "path": "cache/A_0_0",
+      "mode": "A",
+      "repeat": 0,
+      "fold": 0,
+      "seed": 17
+    },
+    {
+      "path": "cache/A_1_0",
+      "mode": "A",
+      "repeat": 1,
+      "fold": 0,
+      "seed": 29
+    },
+    {
+      "path": "cache/A_2_0",
+      "mode": "A",
+      "repeat": 2,
+      "fold": 0,
+      "seed": 43
+    },
+    {
+      "path": "cache/A_3_0",
+      "mode": "A",
+      "repeat": 3,
+      "fold": 0,
+      "seed": 71
+    },
+    {
+      "path": "cache/A_4_0",
+      "mode": "A",
+      "repeat": 4,
+      "fold": 0,
+      "seed": 101
+    },
+    {
+      "path": "cache/B_0_0",
+      "mode": "B",
+      "repeat": 0,
+      "fold": 0,
+      "seed": 1017
+    },
+    {
+      "path": "cache/B_0_1",
+      "mode": "B",
+      "repeat": 0,
+      "fold": 1,
+      "seed": 1018
+    },
+    {
+      "path": "cache/B_0_2",
+      "mode": "B",
+      "repeat": 0,
+      "fold": 2,
+      "seed": 1019
+    },
+    {
+      "path": "cache/B_0_3",
+      "mode": "B",
+      "repeat": 0,
+      "fold": 3,
+      "seed": 1020
+    },
+    {
+      "path": "cache/B_0_4",
+      "mode": "B",
+      "repeat": 0,
+      "fold": 4,
+      "seed": 1021
+    },
+    {
+      "path": "cache/C_0_0",
+      "mode": "C",
+      "repeat": 0,
+      "fold": 0,
+      "seed": 2017
+    },
+    {
+      "path": "cache/D_0_0",
+      "mode": "D",
+      "repeat": 0,
+      "fold": 0,
+      "seed": 3017
+    },
+    {
+      "path": "cache/D_0_1",
+      "mode": "D",
+      "repeat": 0,
+      "fold": 1,
+      "seed": 3018
+    },
+    {
+      "path": "cache/D_0_2",
+      "mode": "D",
+      "repeat": 0,
+      "fold": 2,
+      "seed": 3019
+    },
+    {
+      "path": "cache/D_0_3",
+      "mode": "D",
+      "repeat": 0,
+      "fold": 3,
+      "seed": 3020
+    },
+    {
+      "path": "cache/D_0_4",
+      "mode": "D",
+      "repeat": 0,
+      "fold": 4,
+      "seed": 3021
+    }
+  ]
+}

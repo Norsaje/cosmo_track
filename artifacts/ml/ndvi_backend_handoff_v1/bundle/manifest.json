@@ -1,0 +1,240 @@
+{
+  "schema_version": "1.0",
+  "model_version": "p0-catboost-gpu-v1",
+  "bundle_kind": "trained",
+  "created_at": "2026-09-05T02:29:59.411591Z",
+  "git_commit": "unavailable",
+  "train_fingerprints": {
+    "train": "a75e530d0fb51581ad6800f84b3875233778801491f02236917862faf9b424ec",
+    "test": "3c5c0e27eef8266bcf6dce09c9b556c073cee3902c065a94e4ea7a59edb00993",
+    "folds": "ba1ae945c43820d05bbcbdbf7faf2982c07cbd2ed59aa6fb0a53c3f25f3484a8"
+  },
+  "feature_version": "ndvi-context-v1",
+  "model_files": [
+    {
+      "path": "feature_state.json",
+      "sha256": "5f26db3a85af466e7bbdb819596c8a9b4f86893671418aed813ecc56b42242e2",
+      "format": "json"
+    },
+    {
+      "path": "config.json",
+      "sha256": "38bff3883457439350fae228cd1b1d60d920e5d660975486b3853c056e89b897",
+      "format": "json"
+    },
+    {
+      "path": "estimators.joblib",
+      "sha256": "43c42ddb1bc838267ff8f865af05ff727d7dd7451e3d3b79d0392a293b0ea222",
+      "format": "joblib"
+    }
+  ],
+  "seeds": [
+    17,
+    29,
+    43,
+    71,
+    101
+  ],
+  "cv_summary": {
+    "metrics": [
+      {
+        "mode": "A",
+        "model": "baseline",
+        "n": 6000,
+        "rmse": 0.08845463098077207,
+        "gap_score": 3.46
+      },
+      {
+        "mode": "A",
+        "model": "catboost",
+        "n": 6000,
+        "rmse": 0.06625592399004221,
+        "gap_score": 10.12
+      },
+      {
+        "mode": "A",
+        "model": "ensemble",
+        "n": 6000,
+        "rmse": 0.06864874988974638,
+        "gap_score": 9.41
+      },
+      {
+        "mode": "B",
+        "model": "baseline",
+        "n": 6000,
+        "rmse": 0.09559147167376002,
+        "gap_score": 1.32
+      },
+      {
+        "mode": "B",
+        "model": "catboost",
+        "n": 6000,
+        "rmse": 0.07184886504483701,
+        "gap_score": 8.45
+      },
+      {
+        "mode": "B",
+        "model": "ensemble",
+        "n": 6000,
+        "rmse": 0.07444068301264514,
+        "gap_score": 7.67
+      },
+      {
+        "mode": "C",
+        "model": "baseline",
+        "n": 1200,
+        "rmse": 0.17877237430979828,
+        "gap_score": 0.0
+      },
+      {
+        "mode": "C",
+        "model": "catboost",
+        "n": 1200,
+        "rmse": 0.24660626788737033,
+        "gap_score": 0.0
+      },
+      {
+        "mode": "C",
+        "model": "ensemble",
+        "n": 1200,
+        "rmse": 0.22006788722584636,
+        "gap_score": 0.0
+      },
+      {
+        "mode": "D",
+        "model": "baseline",
+        "n": 117,
+        "rmse": 0.11757604614833413,
+        "gap_score": 0.0
+      },
+      {
+        "mode": "D",
+        "model": "catboost",
+        "n": 117,
+        "rmse": 0.1148089953438372,
+        "gap_score": 0.0
+      },
+      {
+        "mode": "D",
+        "model": "ensemble",
+        "n": 117,
+        "rmse": 0.11467106790263808,
+        "gap_score": 0.0
+      }
+    ],
+    "decisions": {
+      "blend": [
+        {
+          "candidate": "single:baseline",
+          "composite_rmse": 0.1066986441701292,
+          "weights": {
+            "baseline": 1.0,
+            "catboost": 0.0
+          }
+        },
+        {
+          "candidate": "single:catboost",
+          "composite_rmse": 0.09956201797371964,
+          "weights": {
+            "baseline": 0.0,
+            "catboost": 1.0
+          }
+        },
+        {
+          "candidate": "optimized_nonnegative",
+          "composite_rmse": 0.09741183557217524,
+          "weights": {
+            "baseline": 0.30955022511781066,
+            "catboost": 0.6904497748821893
+          }
+        }
+      ],
+      "choice": "optimized_nonnegative",
+      "gates": [
+        {
+          "gate": {
+            "kind": "short_two_sided",
+            "baseline_weight": 0.5
+          },
+          "composite_rmse": 0.10277438453123694,
+          "median_repeat_delta": 0.006575587275959027,
+          "unseen_rmse_delta": 0.007091683607919869,
+          "accepted": false,
+          "reason": "OOF acceptance criteria failed"
+        },
+        {
+          "gate": {
+            "kind": "long_one_sided",
+            "baseline_weight": 0.5
+          },
+          "composite_rmse": 0.09384406027370812,
+          "median_repeat_delta": 0.000019876416151774767,
+          "unseen_rmse_delta": 0.000029904148751494497,
+          "accepted": false,
+          "reason": "OOF acceptance criteria failed"
+        },
+        {
+          "gate": {
+            "kind": "unseen",
+            "baseline_weight": 0.5
+          },
+          "composite_rmse": 0.10301230295900836,
+          "median_repeat_delta": 0.00643443250379927,
+          "unseen_rmse_delta": 0.008039021100490443,
+          "accepted": false,
+          "reason": "OOF acceptance criteria failed"
+        },
+        {
+          "gate": {
+            "kind": "low_source_confidence",
+            "threshold": 0.65,
+            "baseline_weight": 0.5
+          },
+          "composite_rmse": 0.09444228672306147,
+          "median_repeat_delta": 0.0007793631908244378,
+          "unseen_rmse_delta": 0.000860982426309137,
+          "accepted": false,
+          "reason": "OOF acceptance criteria failed"
+        },
+        {
+          "gate": {
+            "kind": "high_disagreement",
+            "threshold": 0.038686281530840444,
+            "baseline_weight": 0.5
+          },
+          "composite_rmse": 0.09829656960464117,
+          "median_repeat_delta": 0.0055667060134628465,
+          "unseen_rmse_delta": 0.006157205287168746,
+          "accepted": false,
+          "reason": "OOF acceptance criteria failed"
+        },
+        {
+          "gate": {
+            "kind": "low_context_quality",
+            "threshold": 0.75,
+            "baseline_weight": 0.5
+          },
+          "composite_rmse": 0.09512849036394226,
+          "median_repeat_delta": 0.0014239042925131146,
+          "unseen_rmse_delta": 0.00177539366682751,
+          "accepted": false,
+          "reason": "OOF acceptance criteria failed"
+        }
+      ],
+      "clip": {
+        "decision": "reject",
+        "reason": "No OOF clipping experiment conducted; raw target preserved"
+      },
+      "selection_bias_warning": "OOF used for tuning and selection; not independent final generalization estimate"
+    }
+  },
+  "package_versions": {
+    "numpy": "2.0.2",
+    "pandas": "2.3.3",
+    "pydantic": "2.12.3",
+    "scikit-learn": "1.6.1",
+    "scipy": "1.16.3",
+    "joblib": "1.5.3",
+    "catboost": "1.2.10",
+    "lightgbm": "4.6.0"
+  }
+}

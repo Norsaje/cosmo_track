@@ -1,0 +1,20 @@
+{
+  "train": {
+    "n": 30520,
+    "label_counts": {
+      "landsat": 13284,
+      "s2": 11235,
+      "modis": 6001
+    },
+    "unknown_keys": []
+  },
+  "test_visible": {
+    "n": 17641,
+    "label_counts": {
+      "s2": 7815,
+      "landsat": 6804,
+      "modis": 3022
+    },
+    "unknown_keys": []
+  }
+}

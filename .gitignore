@@ -1,5 +1,12 @@
+# Объединённая редакция: наши правила (BE-001) + правила Разработчика 1 из ветки `models`.
+# Конфликт был add/add — обе ветки создали файл независимо. Ничего не выбрасываем:
+# секции ML описывают его собственную зону artifacts/ml/, и убирать их мы не вправе.
+
 # Граф знаний строится локально у каждого разработчика (решение по BE-001).
 graphify-out/
+
+# macOS
+.DS_Store
 
 # Python
 __pycache__/
@@ -10,10 +17,13 @@ venv/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.ipynb_checkpoints/
 
 # Секреты: в репозиторий попадает только .env.example с placeholder-ами (инвариант 11).
 .env
 .env.local
+.env.*
+!.env.example
 *.pem
 *.key
 
@@ -22,3 +32,24 @@ venv/
 htmlcov/
 dist/
 build/
+
+# --- Зона Разработчика 1 (ML): Kaggle-пакеты и невыгружаемые результаты обучения ---
+# Kaggle upload files. Rebuild them with artifacts/ml/package_kaggle.py.
+/artifacts/ml/kaggle/*.ipynb
+/artifacts/ml/kaggle/package_manifest.json
+/artifacts/ml/kaggle/README_RU.md
+/artifacts/ml/kaggle_ndvi_*.zip
+/artifacts/ml/kaggle_ndvi_*.zip.sha256
+/artifacts/ml/ndvi_project/
+
+# Downloaded/generated training results and model bundles
+/ndvi_trained_artifacts/
+/ndvi_trained_artifacts.zip
+/ndvi_tuned_artifacts/
+/ndvi_tuned_artifacts.zip
+/artifacts/ml/trained_gpu_v1/
+/artifacts/ml/tuned_gpu_v1/
+
+# Resumable tuning state
+/artifacts/ml/**/*.sqlite3
+/artifacts/ml/**/cache/

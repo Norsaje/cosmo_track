@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-09-05 02:30:27.600556+00:00",
+  "packages": {
+    "numpy": "2.0.2",
+    "pandas": "2.3.3",
+    "pydantic": "2.12.3",
+    "scikit-learn": "1.6.1",
+    "scipy": "1.16.3",
+    "joblib": "1.5.3",
+    "catboost": "1.2.10",
+    "lightgbm": "4.6.0"
+  },
+  "fingerprints": {
+    "train": "a75e530d0fb51581ad6800f84b3875233778801491f02236917862faf9b424ec",
+    "test": "3c5c0e27eef8266bcf6dce09c9b556c073cee3902c065a94e4ea7a59edb00993",
+    "folds": "ba1ae945c43820d05bbcbdbf7faf2982c07cbd2ed59aa6fb0a53c3f25f3484a8"
+  },
+  "models": [
+    "catboost"
+  ],
+  "device": "gpu"
+}

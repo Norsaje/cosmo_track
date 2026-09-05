@@ -1,0 +1,20 @@
+{
+  "archive_inference_rows": 3112,
+  "submission_byte_identical": true,
+  "submission_sha256": "2689ffd3fbd76458768660022564f0937905d6174194d1fb5c49463be29ea611",
+  "archive_sha256": "6d3eae57d92fde850f7010c39632026e4ad55d1128de63affe853b52961f98f0",
+  "archive_name": "kaggle_ndvi_gpu_v1.zip",
+  "training_mode": "catboost_gpu",
+  "gpu_training_executed": true,
+  "gpu_training_completed_at": "2026-09-05T02:30:27.600556+00:00",
+  "trained_artifact_path": "artifacts/ml/trained_gpu_v1",
+  "trained_bundle_hashes_valid": true,
+  "trained_submission_rows": 3112,
+  "trained_submission_valid": true,
+  "trained_submission_sha256": "12ed0c3b8c4da6c8d512b89cc996f1bdec707cfb83cf2496b9449c3bc36a4637",
+  "catboost_cv_a_rmse": 0.06625592399004221,
+  "ensemble_composite_rmse": 0.09741183557217524,
+  "tuning_executed": false,
+  "tests": "20 passed",
+  "local_estimator_training": false
+}

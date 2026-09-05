@@ -1,0 +1,59 @@
+{
+  "rows": 3112,
+  "known_fraction": 0.14910025706940874,
+  "gap_length_counts": {
+    "1": 2262,
+    "2": 674,
+    "3": 123,
+    "4": 28,
+    "5": 25
+  },
+  "month_counts": {
+    "4": 386,
+    "5": 386,
+    "6": 480,
+    "7": 539,
+    "8": 511,
+    "9": 499,
+    "10": 311
+  },
+  "year_counts": {
+    "2010": 81,
+    "2011": 96,
+    "2012": 73,
+    "2013": 108,
+    "2014": 107,
+    "2015": 102,
+    "2016": 123,
+    "2017": 155,
+    "2018": 123,
+    "2019": 218,
+    "2020": 215,
+    "2021": 171,
+    "2022": 195,
+    "2023": 203,
+    "2024": 217,
+    "2025": 925
+  },
+  "left_distance_counts": {
+    "0-7": 2541,
+    "8-15": 404,
+    "16-30": 91,
+    "31+": 63,
+    "none": 13
+  },
+  "right_distance_counts": {
+    "0-7": 2573,
+    "8-15": 392,
+    "16-30": 89,
+    "31+": 45,
+    "none": 13
+  },
+  "source_proxy_visible_distribution": {
+    "s2": 0.44300209738676943,
+    "landsat": 0.3856924210645655,
+    "modis": 0.17130548154866504
+  },
+  "source_proxy_warning": "True source on real gaps is hidden; visible test hierarchy is only a proxy.",
+  "run_definition": "Consecutive hidden target slots within polygon/year; naturally missing daily rows ignored."
+}

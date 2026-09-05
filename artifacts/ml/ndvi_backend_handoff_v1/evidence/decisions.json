@@ -1,0 +1,105 @@
+{
+  "blend": [
+    {
+      "candidate": "single:baseline",
+      "composite_rmse": 0.1066986441701292,
+      "weights": {
+        "baseline": 1.0,
+        "catboost": 0.0
+      }
+    },
+    {
+      "candidate": "single:catboost",
+      "composite_rmse": 0.09956201797371964,
+      "weights": {
+        "baseline": 0.0,
+        "catboost": 1.0
+      }
+    },
+    {
+      "candidate": "optimized_nonnegative",
+      "composite_rmse": 0.09741183557217524,
+      "weights": {
+        "baseline": 0.30955022511781066,
+        "catboost": 0.6904497748821893
+      }
+    }
+  ],
+  "choice": "optimized_nonnegative",
+  "gates": [
+    {
+      "gate": {
+        "kind": "short_two_sided",
+        "baseline_weight": 0.5
+      },
+      "composite_rmse": 0.10277438453123694,
+      "median_repeat_delta": 0.006575587275959027,
+      "unseen_rmse_delta": 0.007091683607919869,
+      "accepted": false,
+      "reason": "OOF acceptance criteria failed"
+    },
+    {
+      "gate": {
+        "kind": "long_one_sided",
+        "baseline_weight": 0.5
+      },
+      "composite_rmse": 0.09384406027370812,
+      "median_repeat_delta": 1.9876416151774767e-05,
+      "unseen_rmse_delta": 2.9904148751494497e-05,
+      "accepted": false,
+      "reason": "OOF acceptance criteria failed"
+    },
+    {
+      "gate": {
+        "kind": "unseen",
+        "baseline_weight": 0.5
+      },
+      "composite_rmse": 0.10301230295900836,
+      "median_repeat_delta": 0.00643443250379927,
+      "unseen_rmse_delta": 0.008039021100490443,
+      "accepted": false,
+      "reason": "OOF acceptance criteria failed"
+    },
+    {
+      "gate": {
+        "kind": "low_source_confidence",
+        "threshold": 0.65,
+        "baseline_weight": 0.5
+      },
+      "composite_rmse": 0.09444228672306147,
+      "median_repeat_delta": 0.0007793631908244378,
+      "unseen_rmse_delta": 0.000860982426309137,
+      "accepted": false,
+      "reason": "OOF acceptance criteria failed"
+    },
+    {
+      "gate": {
+        "kind": "high_disagreement",
+        "threshold": 0.038686281530840444,
+        "baseline_weight": 0.5
+      },
+      "composite_rmse": 0.09829656960464117,
+      "median_repeat_delta": 0.0055667060134628465,
+      "unseen_rmse_delta": 0.006157205287168746,
+      "accepted": false,
+      "reason": "OOF acceptance criteria failed"
+    },
+    {
+      "gate": {
+        "kind": "low_context_quality",
+        "threshold": 0.75,
+        "baseline_weight": 0.5
+      },
+      "composite_rmse": 0.09512849036394226,
+      "median_repeat_delta": 0.0014239042925131146,
+      "unseen_rmse_delta": 0.00177539366682751,
+      "accepted": false,
+      "reason": "OOF acceptance criteria failed"
+    }
+  ],
+  "clip": {
+    "decision": "reject",
+    "reason": "No OOF clipping experiment conducted; raw target preserved"
+  },
+  "selection_bias_warning": "OOF used for tuning and selection; not independent final generalization estimate"
+}

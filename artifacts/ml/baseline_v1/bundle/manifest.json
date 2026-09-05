@@ -1,0 +1,283 @@
+{
+  "schema_version": "1.0",
+  "model_version": "baseline-v1-mean_neighbors",
+  "bundle_kind": "baseline",
+  "created_at": "2026-09-05T00:07:16.031948Z",
+  "git_commit": "8c0e8a5546602ad93d35d9fdf941844c41365c5b",
+  "train_fingerprints": {
+    "train": "a75e530d0fb51581ad6800f84b3875233778801491f02236917862faf9b424ec",
+    "test": "3c5c0e27eef8266bcf6dce09c9b556c073cee3902c065a94e4ea7a59edb00993"
+  },
+  "feature_version": "ndvi-context-v1",
+  "model_files": [
+    {
+      "path": "feature_state.json",
+      "sha256": "5f26db3a85af466e7bbdb819596c8a9b4f86893671418aed813ecc56b42242e2",
+      "format": "json"
+    },
+    {
+      "path": "config.json",
+      "sha256": "31f10611802cf21327dc78d0a78af6ad5ad5cc67d0ce138d654072e9cd9a1d1d",
+      "format": "json"
+    }
+  ],
+  "seeds": [
+    17,
+    29,
+    43,
+    71,
+    101
+  ],
+  "cv_summary": {
+    "metrics": [
+      {
+        "model": "nearest_left",
+        "mode": "A",
+        "n": 6000,
+        "rmse": 0.10798761076777615,
+        "gap_score": 0.0
+      },
+      {
+        "model": "nearest_left",
+        "mode": "B",
+        "n": 6000,
+        "rmse": 0.11415259907374607,
+        "gap_score": 0.0
+      },
+      {
+        "model": "nearest_left",
+        "mode": "C",
+        "n": 1200,
+        "rmse": 0.17877237430979828,
+        "gap_score": 0.0
+      },
+      {
+        "model": "nearest_left",
+        "mode": "D",
+        "n": 117,
+        "rmse": 0.11757604614833411,
+        "gap_score": 0.0
+      },
+      {
+        "model": "nearest_right",
+        "mode": "A",
+        "n": 6000,
+        "rmse": 0.10754512519989949,
+        "gap_score": 0.0
+      },
+      {
+        "model": "nearest_right",
+        "mode": "B",
+        "n": 6000,
+        "rmse": 0.11366049825711139,
+        "gap_score": 0.0
+      },
+      {
+        "model": "nearest_right",
+        "mode": "C",
+        "n": 1200,
+        "rmse": 0.17877237430979828,
+        "gap_score": 0.0
+      },
+      {
+        "model": "nearest_right",
+        "mode": "D",
+        "n": 117,
+        "rmse": 0.11757604614833411,
+        "gap_score": 0.0
+      },
+      {
+        "model": "mean_neighbors",
+        "mode": "A",
+        "n": 6000,
+        "rmse": 0.08845463098077207,
+        "gap_score": 3.46
+      },
+      {
+        "model": "mean_neighbors",
+        "mode": "B",
+        "n": 6000,
+        "rmse": 0.09559147167376002,
+        "gap_score": 1.32
+      },
+      {
+        "model": "mean_neighbors",
+        "mode": "C",
+        "n": 1200,
+        "rmse": 0.17877237430979828,
+        "gap_score": 0.0
+      },
+      {
+        "model": "mean_neighbors",
+        "mode": "D",
+        "n": 117,
+        "rmse": 0.11757604614833411,
+        "gap_score": 0.0
+      },
+      {
+        "model": "linear",
+        "mode": "A",
+        "n": 6000,
+        "rmse": 0.08956171509682996,
+        "gap_score": 3.13
+      },
+      {
+        "model": "linear",
+        "mode": "B",
+        "n": 6000,
+        "rmse": 0.09725407566995589,
+        "gap_score": 0.82
+      },
+      {
+        "model": "linear",
+        "mode": "C",
+        "n": 1200,
+        "rmse": 0.17877237430979828,
+        "gap_score": 0.0
+      },
+      {
+        "model": "linear",
+        "mode": "D",
+        "n": 117,
+        "rmse": 0.11757604614833411,
+        "gap_score": 0.0
+      },
+      {
+        "model": "seasonal_crop",
+        "mode": "A",
+        "n": 6000,
+        "rmse": 0.17828251029067027,
+        "gap_score": 0.0
+      },
+      {
+        "model": "seasonal_crop",
+        "mode": "B",
+        "n": 6000,
+        "rmse": 0.17415178053423602,
+        "gap_score": 0.0
+      },
+      {
+        "model": "seasonal_crop",
+        "mode": "C",
+        "n": 1200,
+        "rmse": 0.17890329108196942,
+        "gap_score": 0.0
+      },
+      {
+        "model": "seasonal_crop",
+        "mode": "D",
+        "n": 117,
+        "rmse": 0.1387262659589279,
+        "gap_score": 0.0
+      },
+      {
+        "model": "pchip",
+        "mode": "A",
+        "n": 6000,
+        "rmse": 0.09353852300502626,
+        "gap_score": 1.94
+      },
+      {
+        "model": "pchip",
+        "mode": "B",
+        "n": 6000,
+        "rmse": 0.10109254451462693,
+        "gap_score": 0.0
+      },
+      {
+        "model": "pchip",
+        "mode": "C",
+        "n": 1200,
+        "rmse": 0.17877237430979828,
+        "gap_score": 0.0
+      },
+      {
+        "model": "pchip",
+        "mode": "D",
+        "n": 117,
+        "rmse": 0.11757604614833411,
+        "gap_score": 0.0
+      },
+      {
+        "model": "akima",
+        "mode": "A",
+        "n": 6000,
+        "rmse": 0.09782834086046197,
+        "gap_score": 0.65
+      },
+      {
+        "model": "akima",
+        "mode": "B",
+        "n": 6000,
+        "rmse": 0.10422816914275046,
+        "gap_score": 0.0
+      },
+      {
+        "model": "akima",
+        "mode": "C",
+        "n": 1200,
+        "rmse": 0.17877237430979828,
+        "gap_score": 0.0
+      },
+      {
+        "model": "akima",
+        "mode": "D",
+        "n": 117,
+        "rmse": 0.11757604614833411,
+        "gap_score": 0.0
+      }
+    ],
+    "selection": [
+      {
+        "model": "nearest_left",
+        "composite_rmse": 0.12110541591362775,
+        "decision": "reject",
+        "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+      },
+      {
+        "model": "nearest_right",
+        "composite_rmse": 0.12076114792553075,
+        "decision": "reject",
+        "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+      },
+      {
+        "model": "mean_neighbors",
+        "composite_rmse": 0.1066986441701292,
+        "decision": "keep",
+        "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+      },
+      {
+        "model": "linear",
+        "composite_rmse": 0.1076678372272071,
+        "decision": "reject",
+        "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+      },
+      {
+        "model": "seasonal_crop",
+        "composite_rmse": 0.17338732053708233,
+        "decision": "reject",
+        "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+      },
+      {
+        "model": "pchip",
+        "composite_rmse": 0.11061585839247301,
+        "decision": "reject",
+        "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+      },
+      {
+        "model": "akima",
+        "composite_rmse": 0.11354467347722175,
+        "decision": "reject",
+        "reason": "four-mode weighted RMSE, weights 0.50/0.25/0.15/0.10"
+      }
+    ]
+  },
+  "package_versions": {
+    "numpy": "2.4.6",
+    "pandas": "3.0.3",
+    "pydantic": "2.13.4",
+    "scikit-learn": "1.9.0",
+    "scipy": "1.18.0",
+    "joblib": "1.5.3"
+  }
+}

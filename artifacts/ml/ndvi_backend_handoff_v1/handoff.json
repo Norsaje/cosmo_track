@@ -1,0 +1,30 @@
+{
+  "handoff_schema_version": "1.0",
+  "created_at": "2026-09-05T08:17:01.150063+00:00",
+  "contract": "C-04/C-05",
+  "model_version": "p0-catboost-gpu-v1",
+  "bundle_path": "bundle",
+  "runtime_source_commit": "fb2b203718f0a17949a68f75460ef7fcc9bdafe5",
+  "python": "3.11",
+  "inference_device": "cpu",
+  "input_fixture": {
+    "path": "examples/test_data.csv",
+    "rows": 57185,
+    "synthetic_gaps": 3112,
+    "sha256": "3c5c0e27eef8266bcf6dce09c9b556c073cee3902c065a94e4ea7a59edb00993"
+  },
+  "expected_output": {
+    "path": "examples/expected_submission.csv",
+    "rows": 3112,
+    "sha256": "12ed0c3b8c4da6c8d512b89cc996f1bdec707cfb83cf2496b9449c3bc36a4637"
+  },
+  "metrics": {
+    "baseline_composite_rmse": 0.1066986441701292,
+    "catboost_composite_rmse": 0.09956201797371964,
+    "ensemble_composite_rmse": 0.09741183557217524,
+    "ensemble_weights": {
+      "baseline": 0.30955022511781066,
+      "catboost": 0.6904497748821893
+    }
+  }
+}
