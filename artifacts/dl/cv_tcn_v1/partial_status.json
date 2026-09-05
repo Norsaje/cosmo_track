@@ -1,0 +1,37 @@
+{
+  "complete_cv": false,
+  "composite_reason": "composite требует всех четырёх режимов A/B/C/D",
+  "composite_rmse": null,
+  "folds_complete": 7,
+  "folds_planned": 16,
+  "kind": "interrupted_run_partial_summary",
+  "seeds": [
+    17,
+    42,
+    73
+  ],
+  "splits": {
+    "matched": {
+      "base_rmse_mean": 0.09128816329421367,
+      "dl_gap_score": 9.22,
+      "dl_rmse_mean": 0.0692744448516953,
+      "dl_rmse_std": 0.0007454829264583198,
+      "folds_complete": 5,
+      "folds_planned": 5,
+      "ml_rmse": null,
+      "rows_per_seed": 6000,
+      "split_complete": true
+    },
+    "unseen": {
+      "base_rmse_mean": 0.09669378506950015,
+      "dl_gap_score": 7.33,
+      "dl_rmse_mean": 0.07555533586279799,
+      "dl_rmse_std": 0.00011658984393349177,
+      "folds_complete": 2,
+      "folds_planned": 5,
+      "ml_rmse": null,
+      "rows_per_seed": 2400,
+      "split_complete": false
+    }
+  }
+}

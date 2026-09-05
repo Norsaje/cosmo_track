@@ -1,0 +1,43 @@
+{
+  "environment": {
+    "cuda_available": false,
+    "cuda_version": "12.1",
+    "cudnn_benchmark": false,
+    "cudnn_deterministic": true,
+    "cudnn_version": 90100,
+    "deterministic_algorithms": true,
+    "git_commit": "01a11f5eb5fd882c699d0ef174478cf717ac1a81",
+    "gpu": [],
+    "packages": {
+      "numpy": "2.4.6",
+      "pandas": "2.2.3",
+      "pytest": "9.0.2",
+      "torch": "2.5.1+cu121"
+    },
+    "platform": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.0"
+  },
+  "files": {
+    "preprocessor.json": "ecf6bb14ab0b376075893b65eb24fca5f813b8a39e90fe43f3eeaaf02f462108",
+    "weights.pt": "b16abdf04d446a5922bc563a62b98fe7ddfe4e1570aa26b485d5f758fc53e612"
+  },
+  "metadata": {
+    "kind": "synthetic_smoke_not_competition_CV",
+    "seed": 17,
+    "window": 15
+  },
+  "model": "residual_tcn",
+  "model_config": {
+    "crop_embedding_dim": 8,
+    "dropout": 0.1,
+    "hidden_size": 16,
+    "input_features": 58,
+    "kernel_size": 5,
+    "layers": 2,
+    "n_crops": 3,
+    "residual_bound": 0.3
+  },
+  "preprocessor_fingerprint": "2797706ebc139389d7f91b8b72317ab25cd6f1be295dc7aba02fc81f3ed89f96",
+  "production_approved": false,
+  "schema_version": "dl-research-0.1"
+}

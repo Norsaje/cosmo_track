@@ -1,0 +1,108 @@
+{
+  "decision": "PENDING_EVALUATION",
+  "environment": {
+    "cuda_available": false,
+    "cuda_version": "12.1",
+    "cudnn_benchmark": false,
+    "cudnn_deterministic": true,
+    "cudnn_version": 90100,
+    "deterministic_algorithms": true,
+    "git_commit": "01a11f5eb5fd882c699d0ef174478cf717ac1a81",
+    "gpu": [],
+    "packages": {
+      "numpy": "2.4.6",
+      "pandas": "2.2.3",
+      "pytest": "9.0.2",
+      "torch": "2.5.1+cu121"
+    },
+    "platform": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.0"
+  },
+  "kind": "synthetic_smoke_not_competition_CV",
+  "results": [
+    {
+      "best_epoch": 2,
+      "checkpoint_bytes": 18991,
+      "history": [
+        {
+          "epoch": 1,
+          "inner_rmse": 0.0029519585656045,
+          "train_loss": 8.706402695679571e-06
+        },
+        {
+          "epoch": 2,
+          "inner_rmse": 0.002503360983106882,
+          "train_loss": 6.272121936490294e-06
+        },
+        {
+          "epoch": 3,
+          "inner_rmse": 0.0025747415934874217,
+          "train_loss": 3.5483446936268592e-06
+        }
+      ],
+      "infer_sec": 0.0030203999995137565,
+      "inner_rmse": 0.002503360983106882,
+      "parameters": 3769,
+      "peak_vram_mb": 0.0,
+      "reload_max_abs_error": 0.0,
+      "seed": 17,
+      "train_sec": 0.08349050000106217
+    },
+    {
+      "best_epoch": 2,
+      "checkpoint_bytes": 18991,
+      "history": [
+        {
+          "epoch": 1,
+          "inner_rmse": 0.003619008090275878,
+          "train_loss": 8.706402695679571e-06
+        },
+        {
+          "epoch": 2,
+          "inner_rmse": 0.0025979152115379236,
+          "train_loss": 8.481451914121863e-06
+        },
+        {
+          "epoch": 3,
+          "inner_rmse": 0.0026568244826188346,
+          "train_loss": 4.126351541344775e-06
+        }
+      ],
+      "infer_sec": 0.002388600001722807,
+      "inner_rmse": 0.0025979152115379236,
+      "parameters": 3769,
+      "peak_vram_mb": 0.0,
+      "reload_max_abs_error": 0.0,
+      "seed": 42,
+      "train_sec": 0.031689499999629334
+    },
+    {
+      "best_epoch": 3,
+      "checkpoint_bytes": 18991,
+      "history": [
+        {
+          "epoch": 1,
+          "inner_rmse": 0.00274244184962559,
+          "train_loss": 8.706402695679571e-06
+        },
+        {
+          "epoch": 2,
+          "inner_rmse": 0.0019455969189712057,
+          "train_loss": 7.461194400093518e-06
+        },
+        {
+          "epoch": 3,
+          "inner_rmse": 0.001632723460024969,
+          "train_loss": 5.395355401560664e-06
+        }
+      ],
+      "infer_sec": 0.002476000001479406,
+      "inner_rmse": 0.001632723460024969,
+      "parameters": 3769,
+      "peak_vram_mb": 0.0,
+      "reload_max_abs_error": 0.0,
+      "seed": 73,
+      "train_sec": 0.030779000000620726
+    }
+  ]
+}

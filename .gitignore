@@ -1,6 +1,8 @@
-# Объединённая редакция: наши правила (BE-001) + правила Разработчика 1 из ветки `models`.
-# Конфликт был add/add — обе ветки создали файл независимо. Ничего не выбрасываем:
-# секции ML описывают его собственную зону artifacts/ml/, и убирать их мы не вправе.
+# Объединённая редакция: наши правила (BE-001) + правила Разработчика 1 из ветки `models`
+# + правила Разработчика 2 из ветки `integration/dl-ml` (merge BE-012).
+# Конфликт был content — ветки развивали файл независимо. Ничего не выбрасываем:
+# секции ML и DL описывают их собственные зоны artifacts/ml/ и artifacts/dl/,
+# и убирать их мы не вправе.
 
 # Граф знаний строится локально у каждого разработчика (решение по BE-001).
 graphify-out/
@@ -13,6 +15,9 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+# Окружения Разработчика 2: отдельный venv под torch и кэш uv.
+.dl-venv/
+.uv-cache/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
@@ -53,3 +58,20 @@ build/
 # Resumable tuning state
 /artifacts/ml/**/*.sqlite3
 /artifacts/ml/**/cache/
+
+# --- Рабочие каталоги вне истории ---
+# `tmp/` — изолированные worktree для чтения чужих веток (§0 CLAUDE.md: чужой код
+# читаем через `git worktree add --detach tmp/<имя>`, копий к себе не делаем).
+# `/.coord-main/` — клон координации Разработчика 2.
+/tmp/
+/.coord-main/
+
+# --- Зона Разработчика 2 (DL): чекпойнты прогонов и Kaggle-пакет ---
+# Per-fold research checkpoints полного прогона: воспроизводимы из manifest +
+# seed. Публикуются OOF по seed, experiments.csv, cv_report.json и
+# learning_curves.json — они содержат все числа отчёта.
+/artifacts/dl/cv_tcn_v1/seed_*_fold_*/
+
+# Kaggle upload bundle: rebuild with configs/dl/kaggle/package_dataset.py
+/artifacts/dl/kaggle_bundle/
+/artifacts/dl/kaggle_bundle.zip

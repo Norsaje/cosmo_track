@@ -1,0 +1,699 @@
+{
+  "kind": "ML_producer_compatibility_review_not_DL_experiment",
+  "producer_commit": "39a8f734b8f5e8553dcf385e9aa1b2c3e2cfec1d",
+  "input_sha256": {
+    "train": "860779e714fe4a256b0fa7a0598f302e65ff0c3b2ed24aee1c97fb3c112b970a",
+    "test": "de94697158743b97a8d181ee55314193a02f77731b3795f7308f594265e57c14",
+    "folds": "3c044655f4266b03a5861e0e1f5d26850d28a7d3baf6e23e24c96c5c97cdaa0f",
+    "oof": "4b738acd4ee0e8e91b7c0ad38411f1fed6abfe170137112640f1fe3db812cd7e",
+    "metrics": "91e69ce3551c253a230e34bffb4a28cef4f31ad7e37f8dcca398cffa746f3e95",
+    "decisions": "a742c3f945153524267d335af21bfac6667d9cf8d81f5124c9c33d3e94834ed6"
+  },
+  "mask_version": "real_test_v1",
+  "mask_columns": [
+    "primary_ndvi",
+    "s2_ndvi",
+    "s2_evi",
+    "s2_ndwi",
+    "landsat_ndvi",
+    "landsat_evi",
+    "landsat_ndwi",
+    "modis_ndvi",
+    "modis_evi",
+    "era5_temp_c",
+    "era5_precip_mm",
+    "year",
+    "doy",
+    "ndvi_climatology_mean",
+    "ndvi_climatology_std",
+    "ndvi_zscore",
+    "status",
+    "n_reference_years"
+  ],
+  "mode_mapping": {
+    "A": "matched",
+    "B": "unseen",
+    "C": "temporal",
+    "D": "hard"
+  },
+  "baseline_metrics": {
+    "overall_rmse": 0.10316774546380601,
+    "gap_score": 0.0,
+    "split_rmse": {
+      "hard": 0.11757604614833413,
+      "matched": 0.08845463098077207,
+      "temporal": 0.17877237430979828,
+      "unseen": 0.09559147167376002
+    },
+    "composite_rmse": 0.10669864417012918,
+    "subgroups": {
+      "is_unseen": {
+        "False": {
+          "n": 2094,
+          "rmse": 0.14591122884663552
+        },
+        "True": {
+          "n": 11223,
+          "rmse": 0.09304379165080935
+        }
+      },
+      "is_hard": {
+        "False": {
+          "n": 13200,
+          "rmse": 0.10303102701695858
+        },
+        "True": {
+          "n": 117,
+          "rmse": 0.11757604614833413
+        }
+      },
+      "source": {
+        "landsat": {
+          "n": 5304,
+          "rmse": 0.09147215643141658
+        },
+        "modis": {
+          "n": 2035,
+          "rmse": 0.12483759438784423
+        },
+        "s2": {
+          "n": 5978,
+          "rmse": 0.10479225343122957
+        }
+      },
+      "gap_length": {
+        "1": {
+          "n": 8738,
+          "rmse": 0.0906429684701303
+        },
+        "2": {
+          "n": 2540,
+          "rmse": 0.09550774910814248
+        },
+        "3": {
+          "n": 606,
+          "rmse": 0.09911947205281121
+        },
+        "4": {
+          "n": 128,
+          "rmse": 0.08744202372783365
+        },
+        "5": {
+          "n": 105,
+          "rmse": 0.11931490694337266
+        },
+        "18": {
+          "n": 18,
+          "rmse": 0.10811969377993655
+        },
+        "23": {
+          "n": 46,
+          "rmse": 0.27149528266193623
+        },
+        "25": {
+          "n": 50,
+          "rmse": 0.19168315424893867
+        },
+        "26": {
+          "n": 156,
+          "rmse": 0.19201397614776683
+        },
+        "27": {
+          "n": 27,
+          "rmse": 0.11714450668519454
+        },
+        "28": {
+          "n": 84,
+          "rmse": 0.19067227197682268
+        },
+        "29": {
+          "n": 58,
+          "rmse": 0.19551114909382775
+        },
+        "30": {
+          "n": 90,
+          "rmse": 0.18911637406848894
+        },
+        "31": {
+          "n": 62,
+          "rmse": 0.10721030714485406
+        },
+        "32": {
+          "n": 32,
+          "rmse": 0.09686929249154057
+        },
+        "33": {
+          "n": 99,
+          "rmse": 0.18075977616833466
+        },
+        "34": {
+          "n": 102,
+          "rmse": 0.19365760172191146
+        },
+        "35": {
+          "n": 70,
+          "rmse": 0.07962240805878097
+        },
+        "36": {
+          "n": 36,
+          "rmse": 0.2305438778341244
+        },
+        "37": {
+          "n": 74,
+          "rmse": 0.17616641009322764
+        },
+        "38": {
+          "n": 76,
+          "rmse": 0.16599392732184107
+        },
+        "39": {
+          "n": 39,
+          "rmse": 0.18648605562295162
+        },
+        "40": {
+          "n": 40,
+          "rmse": 0.16877227798519112
+        },
+        "41": {
+          "n": 41,
+          "rmse": 0.15498781443993423
+        }
+      },
+      "crop_type": {
+        "зерновые": {
+          "n": 3082,
+          "rmse": 0.08807484315442217
+        },
+        "озимая пшеница": {
+          "n": 8947,
+          "rmse": 0.10754751954834886
+        },
+        "пастбища/зерновые": {
+          "n": 739,
+          "rmse": 0.08709936005844576
+        },
+        "подсолнечник": {
+          "n": 549,
+          "rmse": 0.12618479812296526
+        }
+      },
+      "fold": {
+        "r0_f0": {
+          "n": 3622,
+          "rmse": 0.1270954345135074
+        },
+        "r0_f1": {
+          "n": 1223,
+          "rmse": 0.09400132507666492
+        },
+        "r0_f2": {
+          "n": 1226,
+          "rmse": 0.08854478203951045
+        },
+        "r0_f3": {
+          "n": 1225,
+          "rmse": 0.08927063038056202
+        },
+        "r0_f4": {
+          "n": 1221,
+          "rmse": 0.1113789977968045
+        },
+        "r1_f0": {
+          "n": 1200,
+          "rmse": 0.09444063709953533
+        },
+        "r2_f0": {
+          "n": 1200,
+          "rmse": 0.09246053792794989
+        },
+        "r3_f0": {
+          "n": 1200,
+          "rmse": 0.0850451444577483
+        },
+        "r4_f0": {
+          "n": 1200,
+          "rmse": 0.08298983515283032
+        }
+      }
+    }
+  },
+  "baseline_bundle_integrity": {
+    "loadable_hashes": false,
+    "files": [
+      {
+        "path": "feature_state.json",
+        "expected_sha256": "5f26db3a85af466e7bbdb819596c8a9b4f86893671418aed813ecc56b42242e2",
+        "checkout_sha256": "450a62f735fd21fb19a99d1fafa8ac88e0069116bdce9de26030c861fbb04647",
+        "matches": false,
+        "lf_normalized_matches": true
+      },
+      {
+        "path": "config.json",
+        "expected_sha256": "31f10611802cf21327dc78d0a78af6ad5ad5cc67d0ce138d654072e9cd9a1d1d",
+        "checkout_sha256": "09b8aaa566b096a8e506e608ff54c728e0474d24479dd9a8444b71b8b686638d",
+        "matches": false,
+        "lf_normalized_matches": true
+      }
+    ],
+    "repair_applied": false
+  },
+  "oof_rows": 13317,
+  "folds": [
+    {
+      "mode": "A",
+      "repeat": 0,
+      "fold": 0,
+      "seed": 17,
+      "context_policy": "transductive",
+      "fit_excluded_polygons": [
+        "AOI-0004",
+        "AOI-0007",
+        "AOI-0011",
+        "AOI-0015",
+        "AOI-0026",
+        "AOI-0027",
+        "AOI-0030",
+        "AOI-0035",
+        "AOI-0040",
+        "AOI-0041",
+        "AOI-0045",
+        "AOI-0050",
+        "AOI-0052",
+        "AOI-0055",
+        "AOI-0064",
+        "AOI-0069",
+        "AOI-0075",
+        "AOI-0076",
+        "AOI-0077"
+      ],
+      "n_context_hidden": 1200,
+      "n_validation": 1200,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 56302,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "A",
+      "repeat": 1,
+      "fold": 0,
+      "seed": 29,
+      "context_policy": "transductive",
+      "fit_excluded_polygons": [
+        "AOI-0002",
+        "AOI-0003",
+        "AOI-0015",
+        "AOI-0020",
+        "AOI-0027",
+        "AOI-0030",
+        "AOI-0033",
+        "AOI-0035",
+        "AOI-0038",
+        "AOI-0043",
+        "AOI-0052",
+        "AOI-0056",
+        "AOI-0060",
+        "AOI-0063",
+        "AOI-0065",
+        "AOI-0070",
+        "AOI-0071",
+        "AOI-0075",
+        "AOI-0077"
+      ],
+      "n_context_hidden": 1200,
+      "n_validation": 1200,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 51441,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "A",
+      "repeat": 2,
+      "fold": 0,
+      "seed": 43,
+      "context_policy": "transductive",
+      "fit_excluded_polygons": [
+        "AOI-0003",
+        "AOI-0011",
+        "AOI-0015",
+        "AOI-0019",
+        "AOI-0022",
+        "AOI-0026",
+        "AOI-0027",
+        "AOI-0030",
+        "AOI-0035",
+        "AOI-0038",
+        "AOI-0040",
+        "AOI-0043",
+        "AOI-0048",
+        "AOI-0050",
+        "AOI-0053",
+        "AOI-0056",
+        "AOI-0069",
+        "AOI-0076",
+        "AOI-0077"
+      ],
+      "n_context_hidden": 1200,
+      "n_validation": 1200,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 53904,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "A",
+      "repeat": 3,
+      "fold": 0,
+      "seed": 71,
+      "context_policy": "transductive",
+      "fit_excluded_polygons": [
+        "AOI-0003",
+        "AOI-0004",
+        "AOI-0007",
+        "AOI-0008",
+        "AOI-0011",
+        "AOI-0019",
+        "AOI-0021",
+        "AOI-0022",
+        "AOI-0026",
+        "AOI-0030",
+        "AOI-0033",
+        "AOI-0040",
+        "AOI-0043",
+        "AOI-0050",
+        "AOI-0053",
+        "AOI-0056",
+        "AOI-0065",
+        "AOI-0070",
+        "AOI-0077"
+      ],
+      "n_context_hidden": 1200,
+      "n_validation": 1200,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 48979,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "A",
+      "repeat": 4,
+      "fold": 0,
+      "seed": 101,
+      "context_policy": "transductive",
+      "fit_excluded_polygons": [
+        "AOI-0003",
+        "AOI-0004",
+        "AOI-0007",
+        "AOI-0015",
+        "AOI-0019",
+        "AOI-0022",
+        "AOI-0023",
+        "AOI-0035",
+        "AOI-0038",
+        "AOI-0040",
+        "AOI-0043",
+        "AOI-0045",
+        "AOI-0053",
+        "AOI-0056",
+        "AOI-0065",
+        "AOI-0069",
+        "AOI-0070",
+        "AOI-0071",
+        "AOI-0075"
+      ],
+      "n_context_hidden": 1200,
+      "n_validation": 1200,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 46304,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "B",
+      "repeat": 0,
+      "fold": 0,
+      "seed": 1017,
+      "context_policy": "transductive",
+      "fit_excluded_polygons": [
+        "AOI-0002",
+        "AOI-0011",
+        "AOI-0019",
+        "AOI-0040",
+        "AOI-0041",
+        "AOI-0048",
+        "AOI-0050"
+      ],
+      "n_context_hidden": 1200,
+      "n_validation": 1200,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 82396,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "B",
+      "repeat": 0,
+      "fold": 1,
+      "seed": 1018,
+      "context_policy": "transductive",
+      "fit_excluded_polygons": [
+        "AOI-0003",
+        "AOI-0008",
+        "AOI-0022",
+        "AOI-0030",
+        "AOI-0037",
+        "AOI-0053",
+        "AOI-0065",
+        "AOI-0075"
+      ],
+      "n_context_hidden": 1200,
+      "n_validation": 1200,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 76885,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "B",
+      "repeat": 0,
+      "fold": 2,
+      "seed": 1019,
+      "context_policy": "transductive",
+      "fit_excluded_polygons": [
+        "AOI-0004",
+        "AOI-0007",
+        "AOI-0015",
+        "AOI-0038",
+        "AOI-0052",
+        "AOI-0056",
+        "AOI-0069",
+        "AOI-0071"
+      ],
+      "n_context_hidden": 1200,
+      "n_validation": 1200,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 79325,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "B",
+      "repeat": 0,
+      "fold": 3,
+      "seed": 1020,
+      "context_policy": "transductive",
+      "fit_excluded_polygons": [
+        "AOI-0023",
+        "AOI-0026",
+        "AOI-0033",
+        "AOI-0035",
+        "AOI-0043",
+        "AOI-0055",
+        "AOI-0064",
+        "AOI-0076"
+      ],
+      "n_context_hidden": 1200,
+      "n_validation": 1200,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 81698,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "B",
+      "repeat": 0,
+      "fold": 4,
+      "seed": 1021,
+      "context_policy": "transductive",
+      "fit_excluded_polygons": [
+        "AOI-0020",
+        "AOI-0021",
+        "AOI-0027",
+        "AOI-0045",
+        "AOI-0060",
+        "AOI-0063",
+        "AOI-0070",
+        "AOI-0077"
+      ],
+      "n_context_hidden": 1200,
+      "n_validation": 1200,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 79516,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "C",
+      "repeat": 0,
+      "fold": 0,
+      "seed": 2017,
+      "context_policy": "past_only",
+      "fit_excluded_polygons": [],
+      "n_context_hidden": 6892,
+      "n_validation": 1200,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 93063,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "D",
+      "repeat": 0,
+      "fold": 0,
+      "seed": 3017,
+      "context_policy": "one_sided_hard",
+      "fit_excluded_polygons": [
+        "AOI-0002",
+        "AOI-0011",
+        "AOI-0019",
+        "AOI-0040",
+        "AOI-0041",
+        "AOI-0048",
+        "AOI-0050"
+      ],
+      "n_context_hidden": 17552,
+      "n_validation": 22,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 82396,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "D",
+      "repeat": 0,
+      "fold": 1,
+      "seed": 3018,
+      "context_policy": "one_sided_hard",
+      "fit_excluded_polygons": [
+        "AOI-0003",
+        "AOI-0008",
+        "AOI-0022",
+        "AOI-0030",
+        "AOI-0037",
+        "AOI-0053",
+        "AOI-0065",
+        "AOI-0075"
+      ],
+      "n_context_hidden": 23062,
+      "n_validation": 23,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 76885,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "D",
+      "repeat": 0,
+      "fold": 2,
+      "seed": 3019,
+      "context_policy": "one_sided_hard",
+      "fit_excluded_polygons": [
+        "AOI-0004",
+        "AOI-0007",
+        "AOI-0015",
+        "AOI-0038",
+        "AOI-0052",
+        "AOI-0056",
+        "AOI-0069",
+        "AOI-0071"
+      ],
+      "n_context_hidden": 20622,
+      "n_validation": 26,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 79325,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "D",
+      "repeat": 0,
+      "fold": 3,
+      "seed": 3020,
+      "context_policy": "one_sided_hard",
+      "fit_excluded_polygons": [
+        "AOI-0023",
+        "AOI-0026",
+        "AOI-0033",
+        "AOI-0035",
+        "AOI-0043",
+        "AOI-0055",
+        "AOI-0064",
+        "AOI-0076"
+      ],
+      "n_context_hidden": 18249,
+      "n_validation": 25,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 81698,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    },
+    {
+      "mode": "D",
+      "repeat": 0,
+      "fold": 4,
+      "seed": 3021,
+      "context_policy": "one_sided_hard",
+      "fit_excluded_polygons": [
+        "AOI-0020",
+        "AOI-0021",
+        "AOI-0027",
+        "AOI-0045",
+        "AOI-0060",
+        "AOI-0063",
+        "AOI-0070",
+        "AOI-0077"
+      ],
+      "n_context_hidden": 20431,
+      "n_validation": 21,
+      "fold_version": "folds_v1",
+      "window_probes": 8,
+      "fit_rows": 79516,
+      "oof_keys_labels_equal": true,
+      "hidden_channels_empty": true
+    }
+  ],
+  "trained_gpu_bundle_available": false,
+  "remaining": [
+    "ML review/acknowledgement in main",
+    "DL training-target and inner-stop mask policy",
+    "Producer-context consumer runner integration (past_only/one_sided_hard)",
+    "Published final ML ensemble OOF plus hashes; report-only metrics insufficient"
+  ],
+  "dl_decision": "PENDING_EVALUATION"
+}

@@ -1,0 +1,61 @@
+{
+  "environment": {
+    "cuda_available": false,
+    "cuda_version": "12.1",
+    "cudnn_benchmark": false,
+    "cudnn_deterministic": true,
+    "cudnn_version": 90100,
+    "deterministic_algorithms": true,
+    "git_commit": "a4f25631e9cfb3784347921a7626e9887cfb3838",
+    "git_worktree_dirty": true,
+    "gpu": [],
+    "packages": {
+      "numpy": "2.4.6",
+      "pandas": "2.2.3",
+      "pytest": "9.0.2",
+      "torch": "2.5.1+cu121"
+    },
+    "platform": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.0",
+    "source_sha256": {
+      "anomalies/advanced.py": "bb4b17270d5e951c9026421cdaee54af98bb39159cf71e64b9c704aae1314964",
+      "anomalies/events.py": "732f707561067b80c57467e9757f7b7cb94ea3e2f35b250c0ed8d9880acfddc0",
+      "anomalies/explain.py": "50797f3f9bbef73db6ed24f05944205192775bd7c719f46636c5c3ce3fdfdd4b",
+      "dl/__init__.py": "ee72dece67080899569b3371bf3cd3c07cff8bc853a8aa1005386b227a988767",
+      "dl/anomaly_cases.py": "47831b61f8ff0aa500e7d22a1914186e7ebf7bfb463d16950ed080c5c3db350b",
+      "dl/artifacts.py": "5a2eebb9ce0d81e90c7e9239babd83c72ac10fd6c9ead9eaa66ea4aea6b0b899",
+      "dl/data.py": "5aaf87467b8b8822fdc46af2827731300fbf82cb3e920a06b42ec42b3fced1ec",
+      "dl/evaluation.py": "103f54f57d2a4cf69292acb613a3be66aa1d08172c1ffdf45c1e76957083f534",
+      "dl/fixtures.py": "effdb9a77bcd243cf765511c45231f160970076fff479ce5140df5a1404d0510",
+      "dl/models/__init__.py": "8bbcd894ad5dae396d3e72bc3c3bb3a2c41e6f21895e00ea76bfe3d55acda6aa",
+      "dl/models/pypots.py": "9b02cf3549be7da7538268bf37a448098004d88632721ffb14e2aeba78a5af30",
+      "dl/models/tcn.py": "fe9eeff1c377f5501ca0fa7673419976cf344ee53158296d9275d0cf29f56e8c",
+      "dl/predict.py": "aef5b4e6edf1ea3d70343e778a4f220cb7f61626f80821639d604027909733d0",
+      "dl/train.py": "e1b084a9c07dbacdf2bcc7be7040557e41adcd4245678b5f770e670d8332d705",
+      "dl/training.py": "39a92c9b321fc91161e8d3eb1252c6d0a9c59f7b9b94d522c89b51cb8add3b5f"
+    }
+  },
+  "files": {
+    "preprocessor.json": "ecf6bb14ab0b376075893b65eb24fca5f813b8a39e90fe43f3eeaaf02f462108",
+    "weights.pt": "9b343e22c66843d84a74e5578a1569b6a57748e8c231ca423067561c826e211d"
+  },
+  "metadata": {
+    "kind": "synthetic_smoke_not_competition_CV",
+    "seed": 73,
+    "window": 15
+  },
+  "model": "residual_tcn",
+  "model_config": {
+    "crop_embedding_dim": 8,
+    "dropout": 0.1,
+    "hidden_size": 16,
+    "input_features": 58,
+    "kernel_size": 5,
+    "layers": 2,
+    "n_crops": 3,
+    "residual_bound": 0.3
+  },
+  "preprocessor_fingerprint": "2797706ebc139389d7f91b8b72317ab25cd6f1be295dc7aba02fc81f3ed89f96",
+  "production_approved": false,
+  "schema_version": "dl-research-0.1"
+}

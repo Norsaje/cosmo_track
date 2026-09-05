@@ -1,0 +1,129 @@
+{
+  "algorithm_version": "robust-loyo-events-0.1.1",
+  "anon_polygon_id": "AOI-0076",
+  "case_kind": "real_exploratory_no_ground_truth",
+  "caveats": [
+    "No labeled anomaly truth: these are candidates, not confirmed crop damage",
+    "Supplied train status/zscore/climatology were not used as labels or features",
+    "Cloud QA, causal attribution and region metadata are unavailable",
+    "Thresholds unchanged from synthetic config; no tuning on this query year"
+  ],
+  "confidence_semantics": "heuristic_support_not_calibrated_probability",
+  "events": [
+    {
+      "algorithm_version": "robust-loyo-events-0.1.1",
+      "confidence": 0.7714285714285715,
+      "duration_days": 11,
+      "end_date": "2024-06-18",
+      "explanation_ru": "Снижение NDVI совпадает с сменой источника; возможен остаточный сдвиг между датчиками; быстрым отрицательным изменением ряда. Причинность не доказана; confidence отражает поддержку данными, а не вероятность причины.",
+      "min_robust_z": -3.518023942536681,
+      "negative_area": 2.3932862431003046,
+      "observed_points": 7,
+      "reason_codes": [
+        "SOURCE_SWITCH_RISK",
+        "RAPID_NEGATIVE_CHANGE"
+      ],
+      "reconstructed_points": 0,
+      "schema_version": "0.1",
+      "score": 1.8462493875345207,
+      "severity": "critical",
+      "start_date": "2024-06-08"
+    },
+    {
+      "algorithm_version": "robust-loyo-events-0.1.1",
+      "confidence": 0.8857142857142858,
+      "duration_days": 13,
+      "end_date": "2024-07-23",
+      "explanation_ru": "Снижение NDVI совпадает с сменой источника; возможен остаточный сдвиг между датчиками; быстрым отрицательным изменением ряда. Причинность не доказана; confidence отражает поддержку данными, а не вероятность причины.",
+      "min_robust_z": -1.5519992886139193,
+      "negative_area": 4.059075749566029,
+      "observed_points": 7,
+      "reason_codes": [
+        "SOURCE_SWITCH_RISK",
+        "RAPID_NEGATIVE_CHANGE"
+      ],
+      "reconstructed_points": 0,
+      "schema_version": "0.1",
+      "score": 3.5951813781870543,
+      "severity": "biomass_suppression",
+      "start_date": "2024-07-11"
+    },
+    {
+      "algorithm_version": "robust-loyo-events-0.1.1",
+      "confidence": 0.6666666666666666,
+      "duration_days": 3,
+      "end_date": "2024-08-02",
+      "explanation_ru": "NDVI устойчиво ниже исторической сезонной нормы. Данных для интерпретации причины недостаточно; причинность не доказана.",
+      "min_robust_z": -1.5237332446581,
+      "negative_area": 0.5077450598644564,
+      "observed_points": 2,
+      "reason_codes": [],
+      "reconstructed_points": 0,
+      "schema_version": "0.1",
+      "score": 0.33849670657630426,
+      "severity": "biomass_suppression",
+      "start_date": "2024-07-31"
+    },
+    {
+      "algorithm_version": "robust-loyo-events-0.1.1",
+      "confidence": 0.8666666666666667,
+      "duration_days": 6,
+      "end_date": "2024-08-17",
+      "explanation_ru": "Снижение NDVI совпадает с сменой источника; возможен остаточный сдвиг между датчиками. Причинность не доказана; confidence отражает поддержку данными, а не вероятность причины.",
+      "min_robust_z": -1.2378846034279725,
+      "negative_area": 0.5218195650839208,
+      "observed_points": 3,
+      "reason_codes": [
+        "SOURCE_SWITCH_RISK"
+      ],
+      "reconstructed_points": 0,
+      "schema_version": "0.1",
+      "score": 0.45224362307273136,
+      "severity": "biomass_suppression",
+      "start_date": "2024-08-12"
+    },
+    {
+      "algorithm_version": "robust-loyo-events-0.1.1",
+      "confidence": 0.6666666666666666,
+      "duration_days": 4,
+      "end_date": "2024-08-25",
+      "explanation_ru": "NDVI устойчиво ниже исторической сезонной нормы. Данных для интерпретации причины недостаточно; причинность не доказана.",
+      "min_robust_z": -1.1824691306000585,
+      "negative_area": 0.2692276160930304,
+      "observed_points": 2,
+      "reason_codes": [],
+      "reconstructed_points": 0,
+      "schema_version": "0.1",
+      "score": 0.1794850773953536,
+      "severity": "biomass_suppression",
+      "start_date": "2024-08-22"
+    },
+    {
+      "algorithm_version": "robust-loyo-events-0.1.1",
+      "confidence": 0.5333333333333333,
+      "duration_days": 3,
+      "end_date": "2024-09-01",
+      "explanation_ru": "Снижение NDVI совпадает с сменой источника; возможен остаточный сдвиг между датчиками; недостатком надёжных наблюдений или широкой неопределённостью. Причинность не доказана; confidence отражает поддержку данными, а не вероятность причины.",
+      "min_robust_z": -1.2319882714410906,
+      "negative_area": 0.19489295390583955,
+      "observed_points": 2,
+      "reason_codes": [
+        "SOURCE_SWITCH_RISK",
+        "LOW_DATA_COVERAGE"
+      ],
+      "reconstructed_points": 0,
+      "schema_version": "0.1",
+      "score": 0.10394290874978108,
+      "severity": "biomass_suppression",
+      "start_date": "2024-08-30"
+    }
+  ],
+  "human_review": "pending",
+  "qa_available": false,
+  "reference_max_year": 2023,
+  "review_group": "questionable_control",
+  "schema_version": "0.1",
+  "warnings": [],
+  "weather_reason_codes": "not_computed",
+  "year": 2024
+}

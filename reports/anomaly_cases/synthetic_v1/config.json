@@ -1,0 +1,16 @@
+{
+  "doy_radius": 10,
+  "min_reference_years": 3,
+  "mad_floor": 0.04,
+  "pooling_years": 3.0,
+  "suppression_z": -1.0,
+  "critical_z": -2.0,
+  "max_gap_days": 10,
+  "min_event_points": 2,
+  "min_event_days": 3,
+  "critical_min_observed": 2,
+  "critical_min_days": 7,
+  "critical_confidence": 0.55,
+  "min_quality": 0.3,
+  "uncertainty_interval_level": 0.8
+}
