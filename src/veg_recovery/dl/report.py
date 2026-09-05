@@ -94,6 +94,29 @@ def blend_out_of_sample(aligned: pd.DataFrame, grid=np.linspace(0, 1, 101)) -> d
     }
 
 
+def learning_curves(run: Path) -> dict:
+    """Собирает кривые обучения из per-fold checkpoints в один небольшой файл.
+
+    Сами checkpoints остаются локальными: веса не публикуются, а числа, на
+    которых стоит отчёт, сохраняются вместе с их SHA256.
+    """
+    out = {}
+    for path in sorted(run.glob("seed_*_fold_*/manifest.json")):
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        metadata = manifest["metadata"]
+        out[path.parent.name] = {
+            "split": metadata["split"],
+            "fold": metadata["fold"],
+            "seed": metadata["seed"],
+            "epoch_policy": metadata["result"]["epoch_policy"],
+            "best_epoch": metadata["result"]["best_epoch"],
+            "parameters": metadata["result"]["parameters"],
+            "weights_sha256": manifest["files"]["weights.pt"],
+            "history": metadata["history"],
+        }
+    return out
+
+
 def summarise(run: Path) -> dict:
     report = json.loads((run / "cv_report.json").read_text(encoding="utf-8"))
     manifest = json.loads((run / "input_manifest.json").read_text(encoding="utf-8"))
@@ -291,6 +314,12 @@ def main(argv=None):
     decision = adoption_decision(inputs, integration_passed=False)
     Path(args.experiments).parent.mkdir(parents=True, exist_ok=True)
     summary["table"].to_csv(args.experiments, index=False, lineterminator="\n")
+    curves = learning_curves(run)
+    if curves:
+        (run / "learning_curves.json").write_text(
+            json.dumps(curves, ensure_ascii=False, indent=2, sort_keys=True) + chr(10),
+            encoding="utf-8",
+        )
     text = markdown(summary, blend)
     if args.markdown:
         Path(args.markdown).write_text(text + "\n", encoding="utf-8")

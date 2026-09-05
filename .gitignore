@@ -20,6 +20,11 @@ venv/
 # frame.csv.gz duplicates data/train_dataset.csv byte for byte.
 /artifacts/dl/c03_derived/frame.csv.gz
 
+# Per-fold research checkpoints полного прогона: ~44 МБ и воспроизводимы из
+# manifest + seed. Публикуются OOF по seed, experiments.csv, cv_report.json и
+# learning_curves.json — они содержат все числа отчёта.
+/artifacts/dl/cv_tcn_v1/seed_*_fold_*/
+
 # Kaggle upload bundle: rebuild with configs/dl/kaggle/package_dataset.py
 /artifacts/dl/kaggle_bundle/
 /artifacts/dl/kaggle_bundle.zip
