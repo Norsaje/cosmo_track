@@ -113,6 +113,17 @@
     [hidden] { display: none !important; }
 
     html, body { height: 100%; }
+    /* Жесты браузера не должны конкурировать с жестами страницы. Мета-тега для
+       этого не существует — работает CSS-свойство `overscroll-behavior`: оно
+       выключает навигацию «назад/вперёд» перетягиванием содержимого вбок и
+       перезагрузку рывком вниз. Оба жеста начинались там же, где наш свайп
+       панели, и уводили пользователя со страницы вместо открытия меню.
+       Чего страница отключить не может ни тегом, ни свойством, — это системный
+       жест «назад» от самой кромки экрана (навигация жестами в Android, свайп
+       от края в iOS Safari): его обрабатывает операционная система до браузера.
+       Поэтому панель обязана открываться и без жеста — нажатием на язычок и на
+       мини-меню внизу; жест остаётся ускорением, а не единственным входом. */
+    html, body { overscroll-behavior: none; }
     body {
       margin: 0;
       font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -274,14 +285,30 @@
     .sheet[data-state="open"] { transform: translateX(0); }
     .sheet[data-dragging="true"] { transition: none; }
 
-    /* Затемнение под панелью: показывает, что карта временно на втором плане,
-       и даёт закрыть панель касанием мимо неё. */
+    /* Затемнение под панелью: отделяет её от карты и показывает, что панель
+       лежит поверх. Касания оно не ловит, и это здесь главное. Прежняя редакция
+       включала открытой панели `pointer-events: auto` на всю область `inset: 0` —
+       то есть и на видимую полосу карты слева. Карта переставала слушать палец
+       целиком: ни сдвинуть, ни свести пальцами, ни попасть по кнопкам масштаба;
+       любое касание уходило в прозрачный прямоугольник и просто закрывало панель.
+       Закрытие касанием мимо панели никуда не делось, но делает его теперь сама
+       карта (`map.on("click")`): она отличает касание от перетаскивания и не
+       присылает click после панорамирования и сведения пальцев, а глухой
+       прямоугольник поверх такого различия не знает.
+       Плотность снижена с .32 до .18 по той же причине: карта под панелью
+       рабочая, а густая вуаль читается как «выключено». */
     .backdrop {
       position: absolute; inset: 0; z-index: 24;
-      background: rgba(0,0,0,.32);
+      background: rgba(0,0,0,.18);
       opacity: 0; pointer-events: none; transition: opacity .28s ease;
     }
-    .backdrop[data-visible="true"] { opacity: 1; pointer-events: auto; }
+    .backdrop[data-visible="true"] { opacity: 1; }
+
+    /* Кнопки масштаба MapLibre стоят в правом верхнем углу карты — ровно там,
+       откуда выезжает панель, и открытая панель их закрывала: «увеличить» и
+       «уменьшить» пропадали именно тогда, когда открыт список полей. При
+       открытой панели они уезжают на её ширину и остаются на видимой полосе. */
+    body[data-sheet="open"] .maplibregl-ctrl-top-right { right: min(86vw, 380px); }
 
     .sheet-grip {
       flex: none; padding: 10px 14px;
@@ -297,6 +324,19 @@
     .sheet-body {
       flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
       padding: 12px 12px calc(16px + env(safe-area-inset-bottom));
+      /* Ось Y — браузеру (это прокрутка списка), ось X — нам (это закрытие
+         панели). Без явного `pan-y` именно здесь обратный свайп не работал:
+         `touch-action` соседней `.sheet` до содержимого прокручиваемого блока
+         не достаёт, браузер считал горизонтальное движение своим и после
+         второго же `pointermove` присылал `pointercancel` — панель застывала
+         открытой. Отменить это через `preventDefault` нельзя: для pointer-
+         событий прокрутку определяет только `touch-action`. Плата за это —
+         вложенные блоки панели тоже лишаются горизонтальной прокрутки пальцем:
+         запрет предка снять изнутри нельзя. Единственный такой блок —
+         `.tile-coords`, и он в неё не упирается: строка «NN широта, долгота»
+         занимает 311 px при тех же 311 px видимой ширины, прокручивать вбок
+         там нечего. */
+      touch-action: pan-y;
     }
 
     /* Язычок у правого края: единственный видимый признак того, что оттуда
@@ -430,6 +470,10 @@
       .sheet-close { display: none; }
       #map { right: 380px; }
       .backdrop, .edge-hint, .dock { display: none; }
+      /* Панель стоит рядом с картой, а не над ней — угол свободен. Правило нужно
+         для случая, когда экран стал широким при открытой панели: атрибут на
+         body остаётся от мобильной раскладки и иначе увёл бы кнопки в пустоту. */
+      body[data-sheet="open"] .maplibregl-ctrl-top-right { right: 0; }
     }
 
 
@@ -913,6 +957,7 @@
     // карта тянется пальцем, но панель открывается только от самой кромки экрана.
     const EDGE_ZONE = 28;   // ширина зоны у кромки, с которой начинается жест
     const OPEN_THRESHOLD = 0.35;  // доля ширины панели, после которой жест считается открытием
+    const TAP_SLOP = 8;     // палец, стоящий на месте, всё равно проезжает несколько пикселей
 
     function sheetWidth() {
       return $("sheet").getBoundingClientRect().width || 1;
@@ -925,6 +970,9 @@
       sheet.dataset.state = name;
       sheet.style.transform = "";
       $("backdrop").dataset.visible = String(name === "open");
+      // Состояние панели нужно и стилям: по этому атрибуту кнопки масштаба
+      // карты уходят из-под панели, а не остаются под ней невидимыми.
+      document.body.dataset.sheet = name;
       $("edge-hint").hidden = name === "open";
       // Мини-меню прячется вместе с открытием панели. Оно плавает поверх и
       // закрывало кнопку «Запустить анализ» ровно в тот момент, когда до неё
@@ -953,6 +1001,14 @@
 
       let startX = 0, startY = 0, dragging = false, moved = 0, startedAt = 0;
       let opening = false, fromHint = false, lastX = 0;
+      // Момент, до которого следующий клик считается чужим. Браузер синтезирует
+      // click из того же касания, что и жест, и этот клик прилетает уже в новую
+      // раскладку: после свайпа — в плитку под пальцем (поле выбиралось само),
+      // после нажатия на язычок — в карту, потому что язычок к этому моменту
+      // спрятан открывшейся панелью, а карта по касанию панель закрывает.
+      // Ровно поэтому нажатие на язычок и не открывало меню: панель открывалась
+      // и тут же захлопывалась. Глотаем один клик и только сразу за жестом.
+      let swallowClickUntil = 0;
 
       // Карта тянется тем же пальцем и уезжала вместе с жестом панели. MapLibre
       // слушает свои touch-события, и наш preventDefault на pointermove их не
@@ -995,8 +1051,15 @@
         const dy = event.clientY - startY;
         // Вертикальное движение отдаётся содержимому: иначе прокрутка списка
         // внутри открытой панели превращалась бы в попытку её закрыть.
-        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 12) { dragging = false;
-          sheet.dataset.dragging = "false"; mapDrag(true); return; }
+        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 12) {
+          dragging = false;
+          sheet.dataset.dragging = "false";
+          mapDrag(true);
+          // Панель возвращается в своё положение: горизонтальная часть жеста
+          // успевала сдвинуть её, и после отказа она застывала на полпути.
+          setSheet(state.sheet);
+          return;
+        }
         lastX = event.clientX;
         moved = Math.abs(dx);
         const width = sheetWidth();
@@ -1022,15 +1085,28 @@
         // Быстрый короткий свайп — намерение, а не промах: он срабатывает даже
         // когда палец прошёл заметно меньше трети ширины.
         const decisive = speed > 0.5;
+        // Касание — жест, который никуда не уехал. Прежнее условие `dx <= 0`
+        // касанием не считало ничего: палец на язычке сползает вправо на пару
+        // пикселей, и нажатие вместо открытия давало закрытие.
+        const tapped = moved <= TAP_SLOP;
+        // Жест, решивший всё сам, забирает и синтетический клик. Касание по
+        // крестику или по плитке жестом не является — там клик нужен живым.
+        swallowClickUntil = (!tapped || (opening && fromHint)) ? Date.now() + 700 : 0;
         if (opening) {
           // Жест, начатый на язычке, заканчивается открытием — язычок ровно для
           // этого и нарисован, и результат обязан совпадать с нажатием «Поля».
+          // Простое нажатие по язычку — тоже открытие: подпись зовёт потянуть,
+          // но сначала по ней пробуют нажать, и отказ выглядит как поломка.
           // Передумать можно, вернув палец вправо, к кромке.
-          const pulled = -dx > width * OPEN_THRESHOLD || (decisive && dx < 0) ||
-            (fromHint && dx <= 0);
+          const pulled = (fromHint && (tapped || dx <= 0)) ||
+            -dx > width * OPEN_THRESHOLD || (decisive && dx < 0);
           setSheet(pulled ? "open" : "closed");
         } else {
-          setSheet(decisive || dx > width * OPEN_THRESHOLD ? "closed" : "open");
+          // Обратный свайп: панель уходит вправо, за кромку. Направление здесь
+          // обязательно — `decisive` считает модуль пройденного пути, и быстрое
+          // движение влево внутри открытой панели закрывало её вместо того,
+          // чтобы не делать ничего.
+          setSheet((decisive && dx > 0) || dx > width * OPEN_THRESHOLD ? "closed" : "open");
         }
       };
 
@@ -1038,12 +1114,20 @@
       document.addEventListener("pointermove", move, { passive: false });
       document.addEventListener("pointerup", finish);
       document.addEventListener("pointercancel", finish);
+      // Фаза перехвата: клик останавливается до того, как дойдёт до карты,
+      // плитки или кнопки. Срок в 700 мс сам снимает флаг, если клика не было
+      // (после pointercancel браузер его не присылает).
+      document.addEventListener("click", (event) => {
+        if (Date.now() > swallowClickUntil) return;
+        swallowClickUntil = 0;
+        event.stopPropagation();
+        event.preventDefault();
+      }, true);
 
       // Жест не должен быть единственным способом: язычок, мини-меню, крестик
       // и клавиатура делают то же самое.
       $("edge-hint").addEventListener("click", openSheet);
       $("sheet-close").addEventListener("click", closeSheet);
-      $("backdrop").addEventListener("click", closeSheet);
       $("dock-fields").addEventListener("click", openSheet);
       $("dock-map").addEventListener("click", closeSheet);
     }
@@ -1161,7 +1245,13 @@
           return;
         }
         const hits = map.queryRenderedFeatures(event.point, { layers: ["fields-fill"] });
-        if (hits.length) select(hits[0].properties.id);
+        if (hits.length) { select(hits[0].properties.id); return; }
+        // Касание по свободной карте сворачивает панель — прежде это делало
+        // затемнение, но оно же отбирало у карты все жесты. Здесь различие
+        // бесплатное: click не приходит ни после перетаскивания, ни после
+        // сведения пальцев, поэтому карту можно двигать и масштабировать с
+        // открытой панелью, а одиночное касание по-прежнему её закрывает.
+        if (isMobile() && state.sheet === "open") closeSheet();
       });
     }
 
@@ -1666,6 +1756,22 @@
     }
 
     // ---------------------------------------------------------------- аномалии
+    // Категории тяжести C-09 — закрытое множество из трёх значений у производителя,
+    // но в БД и в схеме API это строка (§4.1: Literal и enum запрещены, контракт
+    // ещё 0.1). Поэтому неизвестная категория обязана дойти до экрана как есть,
+    // а не превратиться в «critical» и не уронить отрисовку.
+    const SEVERITY = {
+      critical: { chip: "chip-danger", label: "критическая" },
+      biomass_suppression: { chip: "chip-warning", label: "подавление биомассы" },
+      normal: { chip: "chip-default", label: "норма" },
+      // Fallback baseline-детектора: он тяжесть не оценивает, и красный цвет
+      // приписал бы событию категорию, которой никто не присваивал.
+      baseline_unranked: { chip: "chip-default", label: "без категории (baseline)" },
+    };
+    function severityChip(severity) {
+      return SEVERITY[severity] || { chip: "chip-default", label: String(severity || "—") };
+    }
+
     function renderAnomalies(anomalies) {
       $("anomaly-card").hidden = false;
       const items = anomalies.items || [];
@@ -1688,13 +1794,30 @@
       }
       html += "<table><tr><th>Период</th><th>Тяжесть</th><th>Признаки</th></tr>";
       for (const event of items) {
+        const grade = severityChip(event.severity);
         html += "<tr><td>" + esc(event.start_date) + "<br>— " + esc(event.end_date) +
           "<br><span style=\"color:var(--muted)\">" + (event.duration_days || "?") + " дн.</span></td>" +
-          '<td><span class="chip chip-danger"><i class="dot"></i>' + esc(event.severity) + "</span>" +
+          '<td><span class="chip ' + grade.chip + '"><i class="dot"></i>' + esc(grade.label) + "</span>" +
           "<br><span style=\"color:var(--muted)\">оценка " + event.score.toFixed(3) + "</span></td>" +
-          "<td>" + (event.reason_codes || []).map(esc).join("<br>") + "</td></tr>";
+          "<td>" + ((event.reason_codes || []).length
+            ? (event.reason_codes || []).map(esc).join("<br>")
+            : '<span style="color:var(--muted)">признаков не выделено</span>') +
+          // Пояснение пишет производитель детектора, а не мы: своими словами
+          // пересказывать вывод чужого алгоритма значит отвечать за формулировку,
+          // которой он не давал.
+          (event.explanation_ru
+            ? '<br><span style="color:var(--muted)">' + esc(event.explanation_ru) + "</span>"
+            : "") +
+          "</td></tr>";
       }
       html += "</table>";
+      // Версия алгоритма показывается всегда: результаты 0.1.0 и 0.1.1 различаются,
+      // и без неё нельзя понять, чем именно получены события на экране.
+      const versions = Array.from(new Set(items.map((e) => e.algorithm_version).filter(Boolean)));
+      if (versions.length) {
+        html += '<div class="alert alert-default"><div>Детектор: <code>' +
+          versions.map(esc).join("</code>, <code>") + "</code>.</div></div>";
+      }
       // `confidence` не называется вероятностью и не рисуется процентом: producer
       // объявляет её эвристической поддержкой, а не калиброванной вероятностью.
       html += '<div class="alert alert-default"><div>Показатель <code>confidence</code> — ' +

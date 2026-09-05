@@ -324,14 +324,123 @@ def test_sheet_is_operable_without_gestures(page: str) -> None:
     """Жест не должен быть единственным способом.
 
     Свайп недоступен при работе со скринридером и неудобен мышью, поэтому то же
-    состояние достигается кнопками мини-меню, язычком, крестиком и касанием
-    затемнения.
+    состояние достигается кнопками мини-меню, язычком, крестиком и касанием по
+    свободной карте.
     """
     assert '$("edge-hint").addEventListener("click", openSheet)' in page
     assert '$("dock-fields").addEventListener("click", openSheet)' in page
     assert '$("dock-map").addEventListener("click", closeSheet)' in page
     assert '$("sheet-close").addEventListener("click", closeSheet)' in page
-    assert '$("backdrop").addEventListener("click", closeSheet)' in page
+    # Касание мимо панели закрывает её через саму карту, а не через затемнение:
+    # см. test_open_panel_does_not_take_the_map_away.
+    assert re.search(
+        r'queryRenderedFeatures.{0,900}?isMobile\(\) && state\.sheet === "open"\)'
+        r" closeSheet\(\)",
+        page,
+    )
+
+
+def test_open_panel_does_not_take_the_map_away(page: str) -> None:
+    """Открытая панель не имеет права выключать карту.
+
+    Затемнение растянуто на `inset: 0`, то есть и на полосу карты, которая
+    остаётся видимой слева от панели. Пока оно ловило указатель, карта не
+    получала ни одного касания: её нельзя было ни сдвинуть, ни свести пальцами,
+    ни нажать кнопки масштаба — панель просто захлопывалась в ответ на любое
+    прикосновение. Затемнение обязано остаться чисто декоративным.
+    """
+    rules = re.findall(r"\.backdrop[^{]*\{[^}]*\}", page)
+    assert rules, "правила .backdrop не найдены — тест потерял предмет проверки"
+    for rule in rules:
+        assert "pointer-events: auto" not in rule, rule
+    # Кнопки масштаба уходят из-под панели: без этого «увеличить/уменьшить»
+    # пропадали ровно при открытом списке полей.
+    assert 'body[data-sheet="open"] .maplibregl-ctrl-top-right' in page
+    assert "document.body.dataset.sheet = name" in page
+
+
+def test_reverse_swipe_closes_the_panel(page: str) -> None:
+    """Панель закрывается тем же жестом, которым открылась, только обратным.
+
+    Ось X внутри панели обязана принадлежать жесту, а не браузеру. Без явного
+    `touch-action: pan-y` на прокручиваемом теле панели браузер считал
+    горизонтальное движение своим и после второго `pointermove` присылал
+    `pointercancel`: свайп вправо по списку не закрывал ничего. `preventDefault`
+    здесь бессилен — для pointer-событий прокрутку решает только `touch-action`.
+    """
+    assert re.search(r"\.sheet-body \{[^}]*touch-action: pan-y", page)
+    # Направление обязательно: `decisive` считает модуль пути, и без проверки
+    # знака быстрое движение влево внутри открытой панели её закрывало.
+    assert "(decisive && dx > 0) || dx > width * OPEN_THRESHOLD" in page
+
+
+def test_hint_opens_by_a_plain_tap(page: str) -> None:
+    """По подсказке «потяните влево» сначала нажимают, а потом уже тянут.
+
+    Жест, о котором написано словами, всё равно проверяют нажатием, и отказ
+    читается как поломка. Касанием считается жест, никуда не уехавший: сравнение
+    `dx <= 0` касанием не считало ничего, потому что палец на язычке сползает
+    вправо на пару пикселей.
+    """
+    assert "TAP_SLOP" in page
+    assert "const tapped = moved <= TAP_SLOP" in page
+    assert "(fromHint && (tapped || dx <= 0))" in page
+
+
+def test_synthetic_click_after_a_gesture_is_swallowed(page: str) -> None:
+    """Клик, синтезированный из того же касания, не должен отменять жест.
+
+    Браузер присылает click следом за pointerup — уже в новую раскладку. После
+    нажатия на язычок он попадал в карту (язычок к тому моменту скрыт открытой
+    панелью), а карта по касанию панель закрывает: меню открывалось и тут же
+    захлопывалось. После свайпа тот же клик попадал в плитку под пальцем и
+    выбирал поле. Глотается ровно один клик и только сразу за жестом — иначе
+    перестали бы работать крестик и выбор поля касанием.
+    """
+    assert "swallowClickUntil" in page
+    assert "swallowClickUntil = (!tapped || (opening && fromHint)) ? Date.now() + 700 : 0" in page
+    assert re.search(r'addEventListener\("click", \(event\) => \{ if \(Date\.now\(\) > '
+                     r"swallowClickUntil\) return;", page)
+
+
+def test_browser_gestures_do_not_override_page_gestures(page: str) -> None:
+    """Свайпы браузера не должны конкурировать со свайпами страницы.
+
+    Мета-тега для этого нет — работает `overscroll-behavior`: он выключает
+    навигацию «назад/вперёд» перетягиванием содержимого и перезагрузку рывком
+    вниз. Системный жест от кромки экрана странице не подчиняется вообще,
+    поэтому панель обязана открываться и без жеста — это проверяет
+    test_sheet_is_operable_without_gestures.
+    """
+    assert re.search(r"html, body \{ overscroll-behavior: none; \}", page)
+
+
+def test_severity_categories_are_distinguished(page: str) -> None:
+    """UI различает три категории C-09, а не красит всё красным.
+
+    `critical` и `biomass_suppression` — разные состояния поля, и одинаковый
+    красный чип уравнивал бы их. Категория `baseline_unranked` у fallback-а не
+    красная намеренно: baseline тяжесть не оценивает, и красный цвет приписал бы
+    событию оценку, которой никто не давал.
+    """
+    assert "const SEVERITY = {" in page
+    for name in ("critical", "biomass_suppression", "normal", "baseline_unranked"):
+        assert name + ":" in page, name
+    # Неизвестная категория обязана дойти до экрана как есть: контракт 0.1,
+    # закрывать множество на нашей стороне запрещено (§4.1).
+    assert 'SEVERITY[severity] || { chip: "chip-default"' in page
+
+
+def test_producer_explanation_and_algorithm_version_are_shown(page: str) -> None:
+    """Пояснение пишет производитель детектора, версия алгоритма видна.
+
+    Пересказывать вывод чужого алгоритма своими словами — значит отвечать за
+    формулировку, которой он не давал. Версия обязательна: результаты 0.1.0 и
+    0.1.1 различаются, и без неё непонятно, чем получены события на экране.
+    """
+    assert "event.explanation_ru" in page
+    assert "e.algorithm_version" in page
+    assert "Детектор:" in page
 
 
 def test_vertical_movement_belongs_to_the_content(page: str) -> None:
