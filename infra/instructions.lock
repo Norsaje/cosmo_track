@@ -1,0 +1,33 @@
+# infra/instructions.lock — зафиксированное состояние инструкций команды.
+# Формат: <ref>\t<path>\t<blob-sha>. Обновляется ТОЛЬКО после актуализации
+# CLAUDE.md и used_prompts/backend_dev3_agent.md под новые инструкции.
+# Зафиксировано: 2026-09-05T01:00:24Z
+origin/DL	README.md	f44e9208c59a7fdbc71ab8d79216387ab2cd7d81
+origin/DL	docs/02_dl_developer.md	9e8c1fb09e1bc675447c551c78cea34e86c682dc
+origin/DL	docs/case_doc.pdf	1c9cc8dcc2485a03fc7680a903a2868578d15708
+origin/DL	docs/criteria.pdf	4e43cc39cc105bfdf646f15c5570db6f0be4b67f
+origin/DL	used_prompts/r&d.md	f289e8d96663a6cd47d423a21e9f236233f0d63b
+origin/ED	README.md	f44e9208c59a7fdbc71ab8d79216387ab2cd7d81
+origin/ED	docs/case_doc.pdf	1c9cc8dcc2485a03fc7680a903a2868578d15708
+origin/ED	docs/criteria.pdf	4e43cc39cc105bfdf646f15c5570db6f0be4b67f
+origin/ED	docs/demo_checklist.md	f2f8f8612a24994f267d8dcc380181599d459844
+origin/ED	docs/ed_part.md	15689c682140b9a6c511687cf77262592b1c9364
+origin/ML	README.md	f44e9208c59a7fdbc71ab8d79216387ab2cd7d81
+origin/ML	docs/01_ml_developer.md	12978ccb45ed7cc3741ded047c9b9863065a76d3
+origin/ML	docs/case_doc.pdf	1c9cc8dcc2485a03fc7680a903a2868578d15708
+origin/ML	docs/criteria.pdf	4e43cc39cc105bfdf646f15c5570db6f0be4b67f
+origin/ML	used_prompts/r&d.md	f289e8d96663a6cd47d423a21e9f236233f0d63b
+origin/backend	README.md	f44e9208c59a7fdbc71ab8d79216387ab2cd7d81
+origin/backend	docs/BACKEND.md	579d0a86c98505cd876762a6bc2dc0b126466059
+origin/backend	docs/case_doc.pdf	1c9cc8dcc2485a03fc7680a903a2868578d15708
+origin/backend	docs/criteria.pdf	4e43cc39cc105bfdf646f15c5570db6f0be4b67f
+origin/backend	used_prompts/r&d.md	f289e8d96663a6cd47d423a21e9f236233f0d63b
+origin/main	00_team_coordination.md	2b4529678ff79a0bd014d90965b9b210bcf7e824
+origin/main	README.md	f44e9208c59a7fdbc71ab8d79216387ab2cd7d81
+origin/main	docs/01_ml_developer.md	12978ccb45ed7cc3741ded047c9b9863065a76d3
+origin/main	docs/02_dl_developer.md	720046edf47fe131f0ea599effd84b890f90b974
+origin/main	docs/BACKEND.md	579d0a86c98505cd876762a6bc2dc0b126466059
+origin/main	docs/case_doc.pdf	1c9cc8dcc2485a03fc7680a903a2868578d15708
+origin/main	docs/criteria.pdf	4e43cc39cc105bfdf646f15c5570db6f0be4b67f
+origin/main	docs/ed_part.md	15689c682140b9a6c511687cf77262592b1c9364
+origin/main	used_prompts/r&d.md	f289e8d96663a6cd47d423a21e9f236233f0d63b
