@@ -28,6 +28,7 @@ import importlib
 import os
 import pkgutil
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -307,9 +308,12 @@ def test_stub_and_real_bundle_agree_on_the_baseline(contracts) -> None:
 
     Это не проверка ML-качества, а проверка того, что мы правильно поняли ориентир.
     """
-    bundle = os.environ.get("ML_CONTRACT_BUNDLE")
-    if not bundle or not os.path.isdir(bundle):
-        pytest.skip("не задан ML_CONTRACT_BUNDLE с путём к bundle Разработчика 1")
+    # После мержа ветки `models` baseline-бандл лежит в репозитории, поэтому путь
+    # больше не обязан приходить извне; переменная осталась для проверки чужой копии.
+    default = Path(__file__).resolve().parents[2] / "artifacts/ml/baseline_v1/bundle"
+    bundle = os.environ.get("ML_CONTRACT_BUNDLE") or str(default)
+    if not os.path.isfile(os.path.join(bundle, "manifest.json")):
+        pytest.skip("нет baseline-бандла Разработчика 1")
     frame = _frame()
     mask = _mask(frame)
     handle = build_reconstructor(bundle)

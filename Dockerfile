@@ -17,11 +17,14 @@ WORKDIR /app
 # и hatchling валидирует метаданные при сборке пакета. Без него `uv sync` падает
 # с `OSError: Readme file does not exist` — то есть стенд не собирается вообще.
 COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --frozen --no-install-project --extra web --extra core
+# extra ml нужен именно в рантайме: C-04 — trained-бандл, и joblib поднимает
+# ColumnTransformer из sklearn и CatBoostRegressor. Без него загрузка модели
+# падает уже при старте воркера, а не при первом запросе.
+RUN uv sync --frozen --no-install-project --extra web --extra core --extra ml
 
 COPY src ./src
 COPY apps ./apps
-RUN uv sync --frozen --extra web --extra core
+RUN uv sync --frozen --extra web --extra core --extra ml
 
 # Контейнер не работает под root (§8.11 ТЗ).
 RUN useradd --create-home --uid 10001 appuser \

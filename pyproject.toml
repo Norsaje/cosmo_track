@@ -10,8 +10,13 @@ requires-python = ">=3.11,<3.12"
 # и требование «import базового пакета не требует torch» (docs/ed_part.md:358).
 dependencies = [
     "pydantic>=2.7",
-    "pandas>=2.2",
-    "numpy>=1.26",
+    # Верхние границы поставлены под фактический C-04: ML обучал на pandas 2.3.3 и
+    # numpy 2.0.2, а pickle обученной модели и feature builder завязаны на их поведение.
+    # pandas 3.0 — мажорная смена семантики (copy-on-write, dtypes), проверять её на
+    # демо-пути мы не готовы. Это shared-зависимость: снятие границы требует
+    # уведомления всей команды (§5) и повторного verify_handoff.py --full-inference.
+    "pandas>=2.2,<3",
+    "numpy>=1.26,<3",
 ]
 
 [project.optional-dependencies]
@@ -28,10 +33,30 @@ core = [
     "tenacity>=8.2",
 ]
 
-# Наполнение — зона Разработчика 1 (ML), здесь только то, без чего не собрать
-# baseline. Расширяется по его review (SH-002 reviewers: ML, DL).
+# Наполнение — зона Разработчика 1 (ML). Состав приведён к фактическому C-04:
+# `artifacts/ml/ndvi_backend_handoff_v1/requirements-runtime.txt`. Это уже не «каркас
+# для baseline» — без этих пакетов не загружается trained-бандл p0-catboost-gpu-v1.
+#
+# catboost импортируется лениво (`models/estimators.py:96`), но joblib десериализует
+# сам объект CatBoostRegressor, поэтому в рантайме инференса пакет обязателен.
+# Верхняя граница `<2` стоит намеренно: pickle обученной модели совместим не со всякой
+# версией, а мажорный апгрейд ломает загрузку молча, уже во время демо.
+#
+# ML зафиксировал точные версии обучающего окружения: numpy 2.0.2, pandas 2.3.3,
+# scipy 1.16.3, scikit-learn 1.6.1, pydantic 2.12.3, joblib 1.5.3, catboost 1.2.10.
+# Мы держим нижние границы, а точные версии фиксирует uv.lock; расхождение с
+# обучающим окружением проверяется прогоном verify_handoff.py --full-inference.
 ml = [
-    "scikit-learn>=1.4",
+    # Верхняя граница sklearn — не перестраховка, а воспроизведённый отказ:
+    # на 1.9.0 загрузка estimators.joblib падает
+    # `AttributeError: Can't get attribute '_RemainderColsList' on
+    # sklearn.compose._column_transformer`. Внутри пикла лежит ColumnTransformer,
+    # приватная структура которого между минорными версиями меняется.
+    # ML обучал на 1.6.1, поэтому держим ту же минорную серию.
+    "scikit-learn>=1.6,<1.7",
+    "catboost>=1.2,<2",
+    "joblib>=1.3",
+    "scipy>=1.11",
 ]
 
 # Наполнение — зона Разработчика 2 (DL). В offline CI не ставится: GPU нет,
@@ -128,10 +153,14 @@ testpaths = ["tests"]
 # и по умолчанию не запускаются: основной CI полностью offline (инвариант 13).
 markers = [
     "live: требует сети или внешних credentials; в offline CI не запускается",
+    # Полный parity C-04 считает 3 112 предсказаний CatBoost — около 33 секунд.
+    # В каждом прогоне это лишнее, но перед сдачей и перед демо запускать обязательно:
+    # `uv run pytest -q -m slow`.
+    "slow: длительная проверка (полный инференс на эталоне C-04)",
 ]
 # --strict-markers обязателен: без него опечатка в имени маркера (livve вместо live)
 # проглатывается молча, и живой тест уходит в сеть прямо в offline CI.
-addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not live"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not live and not slow"]
 
 [tool.mypy]
 python_version = "3.11"
