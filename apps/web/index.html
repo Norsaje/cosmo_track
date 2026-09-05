@@ -6,109 +6,642 @@
   <title>cosmo_track — мониторинг вегетационной динамики</title>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <style>
-    :root { color-scheme: light dark; --bg:#f6f7f9; --fg:#16181d; --muted:#5a6472; --line:#d8dde5; --card:#fff; }
+    :root { color-scheme: light dark;
+      --bg:#f6f7f9; --fg:#16181d; --muted:#5a6472; --line:#d8dde5; --card:#fff;
+      --observed:#1b6b3a; --reconstructed:#2f6fd0; --band:rgba(47,111,208,.16);
+      --anomaly:#b23b3b; --anomaly-band:rgba(178,59,59,.14); --warn:#8a5a00; --warn-bg:#fff4dd; }
     @media (prefers-color-scheme: dark) {
-      :root { --bg:#14161a; --fg:#e8eaee; --muted:#98a2b3; --line:#2a2f38; --card:#1b1e24; }
+      :root { --bg:#14161a; --fg:#e8eaee; --muted:#98a2b3; --line:#2a2f38; --card:#1b1e24;
+        --observed:#4cc27e; --reconstructed:#79aef5; --band:rgba(121,174,245,.18);
+        --anomaly:#ff7b7b; --anomaly-band:rgba(255,123,123,.16); --warn:#f0c674; --warn-bg:#332b18; }
     }
     * { box-sizing: border-box; }
     body { margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
            background:var(--bg); color:var(--fg); display:flex; flex-direction:column; height:100vh; }
-    header { padding:10px 16px; border-bottom:1px solid var(--line); background:var(--card);
-             display:flex; align-items:baseline; gap:12px; }
+    header { padding:8px 16px; border-bottom:1px solid var(--line); background:var(--card);
+             display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
     h1 { font-size:15px; margin:0; font-weight:600; }
     .muted { color:var(--muted); font-size:12px; }
-    main { flex:1; display:grid; grid-template-columns:1fr 320px; min-height:0; }
-    #map { min-height:0; }
-    aside { border-left:1px solid var(--line); background:var(--card); padding:14px; overflow:auto; }
-    .row { display:flex; justify-content:space-between; gap:8px; padding:5px 0;
-           border-bottom:1px solid var(--line); }
-    .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
-    .todo { margin-top:14px; padding:10px; border:1px dashed var(--line); border-radius:6px;
+    main { flex:1; display:grid; grid-template-columns:1fr 360px; min-height:0; }
+    .left { display:grid; grid-template-rows:1fr auto; min-height:0; }
+    #map { min-height:220px; background:var(--card); }
+    aside { border-left:1px solid var(--line); background:var(--card); padding:12px; overflow:auto; }
+    .panel { border-top:1px solid var(--line); background:var(--card); padding:10px 14px; max-height:46vh; overflow:auto; }
+    .row { display:flex; justify-content:space-between; gap:8px; padding:4px 0; border-bottom:1px solid var(--line); }
+    .row:last-child { border-bottom:none; }
+    button { font:inherit; padding:6px 10px; border:1px solid var(--line); border-radius:6px;
+             background:var(--card); color:var(--fg); cursor:pointer; }
+    button:hover:not(:disabled) { border-color:var(--muted); }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    button.primary { background:var(--reconstructed); border-color:var(--reconstructed); color:#fff; }
+    input, select { font:inherit; padding:5px 7px; border:1px solid var(--line); border-radius:6px;
+                    background:var(--bg); color:var(--fg); width:100%; }
+    label { display:block; font-size:12px; color:var(--muted); margin:8px 0 2px; }
+    .toolbar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    .list { margin:6px 0 0; padding:0; list-style:none; }
+    .list li { padding:6px 8px; border:1px solid var(--line); border-radius:6px; margin-bottom:5px; cursor:pointer; }
+    .list li[aria-selected="true"] { border-color:var(--reconstructed); background:var(--band); }
+    .note { margin-top:10px; padding:8px 10px; border:1px solid var(--line); border-radius:6px;
             color:var(--muted); font-size:12px; }
-    @media (max-width:800px) { main { grid-template-columns:1fr; grid-template-rows:1fr auto; }
-                               aside { border-left:none; border-top:1px solid var(--line); } }
+    .note.warn { color:var(--warn); background:var(--warn-bg); border-color:currentColor; }
+    .badge { display:inline-block; padding:1px 6px; border-radius:999px; border:1px solid currentColor;
+             font-size:11px; margin-left:6px; }
+    .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-bottom:6px; }
+    .legend i { display:inline-block; width:14px; height:3px; vertical-align:middle; margin-right:5px; }
+    .legend .dot { width:8px; height:8px; border-radius:50%; }
+    table { width:100%; border-collapse:collapse; font-size:12px; }
+    th, td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+    code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; }
+    #chart { width:100%; height:230px; display:block; }
+    .stage { display:flex; gap:4px; flex-wrap:wrap; margin-top:6px; }
+    .stage span { font-size:11px; padding:2px 6px; border:1px solid var(--line); border-radius:4px; color:var(--muted); }
+    .stage span[data-done="true"] { border-color:var(--observed); color:var(--observed); }
+    .stage span[data-current="true"] { border-color:var(--reconstructed); color:var(--reconstructed); font-weight:600; }
+    @media (max-width:900px) { main { grid-template-columns:1fr; } aside { border-left:none; border-top:1px solid var(--line); } }
   </style>
 </head>
 <body>
   <header>
     <h1>cosmo_track</h1>
-    <span class="muted">скелет BE-001 — карта и статус сервисов</span>
+    <span class="muted">восстановление NDVI и негативные аномалии</span>
+    <span id="health-line" class="muted" style="margin-left:auto">состояние: запрашиваю…</span>
   </header>
+
   <main>
-    <div id="map"></div>
-    <aside>
-      <strong>Состояние сервиса</strong>
-      <div id="health"><div class="row muted">запрашиваю…</div></div>
-      <div class="todo" id="tiles-note" hidden>
-        Тайлы карты не загружаются — нет доступа к сети. Это не отказ сервиса.
+    <div class="left">
+      <div id="map"></div>
+      <div class="panel" id="chart-panel">
+        <div class="legend">
+          <span><i class="dot" style="background:var(--observed)"></i>наблюдение (спутник)</span>
+          <span><i style="background:var(--reconstructed)"></i>восстановлено моделью</span>
+          <span><i style="background:var(--band);height:10px"></i>интервал (не сертифицирован)</span>
+          <span><i style="background:var(--anomaly-band);height:10px"></i>период аномалии</span>
+        </div>
+        <svg id="chart" role="img" aria-label="Ряд NDVI"></svg>
+        <div id="chart-note" class="muted">Выберите полигон и запустите анализ.</div>
       </div>
-      <div class="todo">
-        Рисование полигонов — BE-005, график ряда и панель аномалий — BE-013.
-        Сейчас это скелет: он подтверждает, что фронт доходит до API.
-        Вендоринг MapLibre и офлайн-тайлы — BE-014 (демо без сети).
+    </div>
+
+    <aside>
+      <div class="toolbar">
+        <button id="btn-draw">Нарисовать поле</button>
+        <button id="btn-cancel" disabled>Отменить</button>
+        <button id="btn-delete" disabled>Удалить</button>
+      </div>
+      <div id="draw-hint" class="note" hidden>
+        Кликайте по карте, чтобы поставить вершины. Нужно минимум три точки,
+        затем нажмите «Завершить контур».
+        <div style="margin-top:6px"><button id="btn-finish" disabled>Завершить контур</button></div>
+      </div>
+
+      <strong>Поля</strong>
+      <ul class="list" id="polygons"><li class="muted">загружаю…</li></ul>
+
+      <label for="date-from">Период анализа</label>
+      <div style="display:flex; gap:6px">
+        <input type="date" id="date-from" value="2024-04-01" />
+        <input type="date" id="date-to" value="2024-09-30" />
+      </div>
+      <div style="margin-top:8px">
+        <button class="primary" id="btn-analyse" disabled>Запустить анализ</button>
+      </div>
+      <div id="job-status" class="note" hidden></div>
+
+      <div id="anomaly-panel" style="margin-top:14px" hidden>
+        <strong>Аномалии</strong>
+        <div id="anomaly-body"></div>
+      </div>
+
+      <div id="provenance-panel" style="margin-top:14px" hidden>
+        <strong>Происхождение данных</strong>
+        <div id="provenance-body"></div>
+      </div>
+
+      <div class="note" id="tiles-note" hidden>
+        Тайлы карты не загрузились — нет доступа к сети. Это не отказ сервиса:
+        анализ и график работают, недоступна только подложка.
       </div>
     </aside>
   </main>
 
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script>
-    // Порядок важен: панель состояния запрашивается ПЕРВОЙ и в отдельном блоке.
-    // MapLibre и тайлы тянутся из внешней сети; без неё `maplibregl` не определён,
-    // и если инициализация карты стоит выше, ReferenceError обрывает весь скрипт —
-    // страница выглядит мёртвой при полностью исправном API.
-    (function renderHealth() {
-      // Цвет — не единственный сигнал состояния: рядом всегда идёт текст (§8.9 ТЗ).
-      var COLOR = { ok: '#2e7d32', degraded: '#b8860b', down: '#c62828', not_configured: '#78849a' };
-      var box = document.getElementById('health');
-      fetch('/health/ready')
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          box.innerHTML = Object.keys(data).map(function (key) {
-            var v = data[key];
-            return '<div class="row"><span>' + key + '</span><span>' +
-              '<span class="dot" style="background:' + (COLOR[v] || '#78849a') + '"></span>' +
-              v + '</span></div>';
-          }).join('');
-        })
-        .catch(function () {
-          box.innerHTML = '<div class="row">API недоступен — проверьте, поднят ли сервис</div>';
-        });
-    })();
+  (function () {
+    "use strict";
 
-    (function renderMap() {
-      var host = document.getElementById('map');
-      // Отсутствие карты не должно ломать остальную страницу: офлайн-демо обязано
-      // показывать состояние сервиса и честно сообщать, что карта недоступна.
-      if (typeof maplibregl === 'undefined') {
-        host.innerHTML = '<div style="padding:16px;color:var(--muted)">' +
-          'Карта недоступна: библиотека MapLibre не загрузилась. ' +
-          'Скорее всего нет доступа к сети — сам сервис при этом работает, ' +
-          'состояние справа.</div>';
+    const state = {
+      polygons: [],
+      selected: null,
+      draft: [],          // вершины рисуемого контура
+      drawing: false,
+      map: null,
+      poll: null,
+      series: null,
+      anomalies: null,
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const api = (path, options) => fetch("/api/v1" + path, options);
+
+    // ---------------------------------------------------------------- состояние сервиса
+    // Панель состояния запрашивается первой и отдельно: MapLibre тянется из внешней
+    // сети, и без неё `maplibregl` не определён. Если инициализация карты идёт раньше,
+    // ReferenceError обрывает весь скрипт — страница выглядит мёртвой при живом API.
+    async function renderHealth() {
+      try {
+        const body = await (await fetch("/health/ready")).json();
+        const parts = [];
+        for (const key of ["database", "redis", "model_bundle"]) {
+          parts.push(key + ": " + body[key]);
+        }
+        // Цвет не единственный сигнал состояния (§8.9 ТЗ) — статус всегда словом.
+        $("health-line").textContent = "состояние: " + body.status + " · " + parts.join(" · ");
+      } catch (error) {
+        $("health-line").textContent = "состояние: API недоступен";
+      }
+    }
+
+    // ---------------------------------------------------------------- карта
+    function initMap() {
+      if (typeof maplibregl === "undefined") {
+        $("tiles-note").hidden = false;
         return;
       }
-      try {
-        var map = new maplibregl.Map({
-          container: 'map',
-          style: {
-            version: 8,
-            sources: { osm: { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-                              tileSize: 256, attribution: '© OpenStreetMap' } },
-            layers: [{ id: 'osm', type: 'raster', source: 'osm' }]
+      const map = new maplibregl.Map({
+        container: "map",
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: "raster",
+              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              tileSize: 256,
+              attribution: "© OpenStreetMap",
+            },
           },
-          center: [37.6, 55.75],
-          zoom: 4
+          layers: [{ id: "osm", type: "raster", source: "osm" }],
+        },
+        center: [39.5, 45.5],
+        zoom: 7,
+      });
+      state.map = map;
+
+      map.on("error", () => { $("tiles-note").hidden = false; });
+
+      map.on("load", () => {
+        map.addSource("fields", { type: "geojson", data: emptyCollection() });
+        map.addLayer({
+          id: "fields-fill", type: "fill", source: "fields",
+          paint: { "fill-color": "#2f6fd0", "fill-opacity": 0.18 },
         });
-        map.addControl(new maplibregl.NavigationControl());
-        // Тайлы тоже внешние: отдельно сообщаем, если они не грузятся.
-        map.on('error', function () {
-          var note = document.getElementById('tiles-note');
-          if (note) { note.hidden = false; }
+        map.addLayer({
+          id: "fields-line", type: "line", source: "fields",
+          // Выбранное поле выделяется толщиной, а не только цветом: различие
+          // должно читаться и при монохромном выводе, и при дальтонизме.
+          paint: {
+            "line-color": ["case", ["get", "selected"], "#1b6b3a", "#2f6fd0"],
+            "line-width": ["case", ["get", "selected"], 3, 1.5],
+          },
         });
-      } catch (e) {
-        host.innerHTML = '<div style="padding:16px;color:var(--muted)">' +
-          'Карта не инициализировалась. Сервис при этом работает.</div>';
+        map.addSource("draft", { type: "geojson", data: emptyCollection() });
+        map.addLayer({
+          id: "draft-line", type: "line", source: "draft",
+          paint: { "line-color": "#b23b3b", "line-width": 2, "line-dasharray": [2, 1] },
+        });
+        map.addLayer({
+          id: "draft-points", type: "circle", source: "draft",
+          filter: ["==", "$type", "Point"],
+          paint: { "circle-radius": 4, "circle-color": "#b23b3b" },
+        });
+        refreshMapData();
+      });
+
+      map.on("click", (event) => {
+        if (state.drawing) {
+          state.draft.push([event.lngLat.lng, event.lngLat.lat]);
+          $("btn-finish").disabled = state.draft.length < 3;
+          refreshDraft();
+          return;
+        }
+        const hits = map.queryRenderedFeatures(event.point, { layers: ["fields-fill"] });
+        if (hits.length) select(hits[0].properties.id);
+      });
+    }
+
+    const emptyCollection = () => ({ type: "FeatureCollection", features: [] });
+
+    function refreshMapData() {
+      if (!state.map || !state.map.getSource("fields")) return;
+      state.map.getSource("fields").setData({
+        type: "FeatureCollection",
+        features: state.polygons.map((polygon) => ({
+          type: "Feature",
+          geometry: polygon.geometry,
+          properties: { id: polygon.id, selected: polygon.id === state.selected },
+        })),
+      });
+    }
+
+    function refreshDraft() {
+      if (!state.map || !state.map.getSource("draft")) return;
+      const features = state.draft.map((point) => ({
+        type: "Feature", geometry: { type: "Point", coordinates: point }, properties: {},
+      }));
+      if (state.draft.length > 1) {
+        features.push({
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: state.draft },
+          properties: {},
+        });
       }
-    })();
+      state.map.getSource("draft").setData({ type: "FeatureCollection", features });
+    }
+
+    // ---------------------------------------------------------------- полигоны
+    async function loadPolygons() {
+      try {
+        const body = await (await api("/polygons")).json();
+        state.polygons = body.items || [];
+      } catch (error) {
+        state.polygons = [];
+      }
+      renderPolygons();
+      refreshMapData();
+    }
+
+    function renderPolygons() {
+      const list = $("polygons");
+      list.innerHTML = "";
+      if (!state.polygons.length) {
+        list.innerHTML = '<li class="muted">полей пока нет — нарисуйте контур на карте</li>';
+        return;
+      }
+      for (const polygon of state.polygons) {
+        const item = document.createElement("li");
+        item.setAttribute("aria-selected", String(polygon.id === state.selected));
+        const repaired = (polygon.validation_notes || []).length
+          ? '<span class="badge" title="контур был исправлен сервером">исправлен</span>' : "";
+        item.innerHTML =
+          "<div><strong>" + escapeHtml(polygon.name) + "</strong>" + repaired + "</div>" +
+          '<div class="muted">' + polygon.area_ha.toFixed(1) + " га · " +
+          escapeHtml(polygon.crop_type || "культура не указана") + "</div>";
+        item.onclick = () => select(polygon.id);
+        list.appendChild(item);
+      }
+    }
+
+    function select(id) {
+      state.selected = id;
+      renderPolygons();
+      refreshMapData();
+      $("btn-analyse").disabled = false;
+      $("btn-delete").disabled = false;
+    }
+
+    async function createPolygon(ring) {
+      // Кольцо замыкается здесь, а не на сервере: GeoJSON требует совпадения первой
+      // и последней точки, и незамкнутый контур сервер обязан отвергнуть.
+      const closed = ring.concat([ring[0]]);
+      const name = prompt("Название поля", "Поле " + new Date().toLocaleDateString("ru-RU"));
+      if (name === null) return;
+      const response = await api("/polygons", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: name || "Без названия",
+          source: "manual",
+          geometry: { type: "Polygon", coordinates: [closed] },
+        }),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        // Причина отказа показывается как есть: у сервера коды вида AREA_TOO_SMALL,
+        // и без них пользователь не поймёт, что именно исправить.
+        alert("Контур не принят: " + (detail.detail || detail.message || response.status));
+        return;
+      }
+      const created = await response.json();
+      await loadPolygons();
+      select(created.id);
+    }
+
+    async function deleteSelected() {
+      if (!state.selected) return;
+      if (!confirm("Удалить поле вместе с его анализами?")) return;
+      await api("/polygons/" + state.selected, { method: "DELETE" });
+      state.selected = null;
+      $("btn-analyse").disabled = true;
+      $("btn-delete").disabled = true;
+      clearResults();
+      await loadPolygons();
+    }
+
+    // ---------------------------------------------------------------- анализ
+    const STAGES = ["QUEUED", "FETCHING", "PREPROCESSING", "RECONSTRUCTING", "ANALYZING", "COMPLETED"];
+
+    function renderStages(current) {
+      const index = STAGES.indexOf(current);
+      return '<div class="stage">' + STAGES.map((stage, position) =>
+        "<span data-done=\"" + (index > position) + "\" data-current=\"" + (index === position) + "\">" +
+        stage + "</span>").join("") + "</div>";
+    }
+
+    async function startAnalysis() {
+      if (!state.selected) return;
+      clearResults();
+      const response = await api("/analyses", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          polygon_id: state.selected,
+          date_from: $("date-from").value,
+          date_to: $("date-to").value,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        showJob("Анализ не запущен: " + (body.detail || response.status), true);
+        return;
+      }
+      // 200 вместо 202 означает идемпотентный ответ: анализ с такой геометрией
+      // и периодом уже существует, новая джоба не создавалась.
+      const reused = response.status === 200;
+      showJob((reused ? "Анализ уже выполнялся, показываю его результат. " : "") +
+              "Джоба " + body.job_id.slice(0, 8) + "…");
+      pollJob(body.job_id, body.analysis_id);
+    }
+
+    function pollJob(jobId, analysisId) {
+      if (state.poll) clearInterval(state.poll);
+      state.poll = setInterval(async () => {
+        let job;
+        try {
+          job = await (await api("/jobs/" + jobId)).json();
+        } catch (error) { return; }
+        showJob("Стадия: " + job.state + " · " + job.progress + "%" +
+                (job.partial ? " · данные неполные" : "") + renderStages(job.state));
+        if (job.state === "COMPLETED") {
+          clearInterval(state.poll);
+          loadResults(analysisId, job);
+        } else if (job.state === "FAILED") {
+          clearInterval(state.poll);
+          showJob("Анализ не выполнен: " + (job.error_code || "") + " — " +
+                  (job.error_message_safe || "причина не указана"), true);
+        }
+      }, 1000);
+    }
+
+    function showJob(html, isWarning) {
+      const box = $("job-status");
+      box.hidden = false;
+      box.className = "note" + (isWarning ? " warn" : "");
+      box.innerHTML = html;
+    }
+
+    function clearResults() {
+      state.series = null;
+      state.anomalies = null;
+      $("anomaly-panel").hidden = true;
+      $("provenance-panel").hidden = true;
+      $("chart").innerHTML = "";
+      $("chart-note").textContent = "Выберите полигон и запустите анализ.";
+    }
+
+    async function loadResults(analysisId, job) {
+      const [series, anomalies, provenance] = await Promise.all([
+        (await api("/analyses/" + analysisId + "/series")).json(),
+        (await api("/analyses/" + analysisId + "/anomalies")).json(),
+        (await api("/analyses/" + analysisId + "/provenance")).json(),
+      ]);
+      state.series = series;
+      state.anomalies = anomalies;
+      drawChart(series, anomalies);
+      renderAnomalies(anomalies);
+      renderProvenance(provenance, series, job);
+    }
+
+    // ---------------------------------------------------------------- график
+    // Рисуется вручную в SVG, без библиотеки: график обязан работать в демо без сети,
+    // а внешний CDN — единственная часть страницы, которая может не загрузиться.
+    function drawChart(series, anomalies) {
+      const svg = $("chart");
+      svg.innerHTML = "";
+      const points = series.points || [];
+      if (!points.length) {
+        $("chart-note").textContent = "Ряд пуст: в выбранном периоде нет данных.";
+        return;
+      }
+
+      const width = svg.clientWidth || 720;
+      const height = 230;
+      const pad = { left: 44, right: 12, top: 10, bottom: 24 };
+      svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+
+      const times = points.map((p) => Date.parse(p.date));
+      const minTime = Math.min(...times), maxTime = Math.max(...times);
+      const values = [];
+      for (const point of points) {
+        for (const key of ["primary_ndvi", "primary_ndvi_reconstructed", "lower", "upper"]) {
+          if (point[key] !== null && point[key] !== undefined) values.push(point[key]);
+        }
+      }
+      // Диапазон осей берётся из данных, а не фиксируется в [-1,1]: реальный NDVI
+      // выходит за физический диапазон (train до −2.13, test до 1.84), и обрезка
+      // по [-1,1] спрятала бы часть ряда.
+      let minValue = Math.min(...values), maxValue = Math.max(...values);
+      if (!isFinite(minValue) || !isFinite(maxValue)) { minValue = 0; maxValue = 1; }
+      const span = (maxValue - minValue) || 1;
+      minValue -= span * 0.05; maxValue += span * 0.05;
+
+      const x = (time) => pad.left + (time - minTime) / ((maxTime - minTime) || 1) *
+                          (width - pad.left - pad.right);
+      const y = (value) => pad.top + (maxValue - value) / (maxValue - minValue) *
+                           (height - pad.top - pad.bottom);
+
+      const ns = "http://www.w3.org/2000/svg";
+      const add = (tag, attributes, parent) => {
+        const node = document.createElementNS(ns, tag);
+        for (const key in attributes) node.setAttribute(key, attributes[key]);
+        (parent || svg).appendChild(node);
+        return node;
+      };
+
+      // Полосы аномалий рисуются первыми, чтобы оставаться под рядом.
+      for (const event of (anomalies.items || [])) {
+        const left = x(Date.parse(event.start_date));
+        const right = x(Date.parse(event.end_date));
+        add("rect", { x: left, y: pad.top, width: Math.max(2, right - left),
+                      height: height - pad.top - pad.bottom, fill: "var(--anomaly-band)" });
+      }
+
+      // Оси: горизонтальные линии с подписями значений.
+      for (let step = 0; step <= 4; step++) {
+        const value = minValue + (maxValue - minValue) * step / 4;
+        const py = y(value);
+        add("line", { x1: pad.left, y1: py, x2: width - pad.right, y2: py,
+                      stroke: "var(--line)", "stroke-width": 1 });
+        const label = add("text", { x: 4, y: py + 4, fill: "var(--muted)", "font-size": 10 });
+        label.textContent = value.toFixed(2);
+      }
+
+      // Лента неопределённости. Подписывается словом, а не процентом: producer
+      // сообщает `interval_status`, из которого следует, что интервалы эмпирические
+      // и формально не сертифицированы — «95 % уверенности» было бы враньём.
+      const band = points.filter((p) => p.lower !== null && p.upper !== null);
+      if (band.length > 1) {
+        const top = band.map((p) => x(Date.parse(p.date)) + "," + y(p.upper));
+        const bottom = band.slice().reverse().map((p) => x(Date.parse(p.date)) + "," + y(p.lower));
+        add("polygon", { points: top.concat(bottom).join(" "), fill: "var(--band)" });
+      }
+
+      // Восстановленный ряд — сплошная линия по всем точкам, где значение известно.
+      const filled = points
+        .map((p) => ({ time: Date.parse(p.date),
+                       value: p.is_observed ? p.primary_ndvi : p.primary_ndvi_reconstructed }))
+        .filter((p) => p.value !== null && p.value !== undefined);
+      if (filled.length > 1) {
+        add("polyline", {
+          points: filled.map((p) => x(p.time) + "," + y(p.value)).join(" "),
+          fill: "none", stroke: "var(--reconstructed)", "stroke-width": 1.6,
+        });
+      }
+
+      // Наблюдения — отдельные точки поверх линии. Так восстановленное и измеренное
+      // различимы формой, а не только цветом (§8.9 ТЗ).
+      for (const point of points) {
+        if (!point.is_observed || point.primary_ndvi === null) continue;
+        add("circle", { cx: x(Date.parse(point.date)), cy: y(point.primary_ndvi), r: 2.6,
+                        fill: "var(--observed)" });
+      }
+
+      // Подписи крайних дат.
+      const first = add("text", { x: pad.left, y: height - 8, fill: "var(--muted)", "font-size": 10 });
+      first.textContent = points[0].date;
+      const last = add("text", { x: width - pad.right, y: height - 8, fill: "var(--muted)",
+                                 "font-size": 10, "text-anchor": "end" });
+      last.textContent = points[points.length - 1].date;
+
+      const observed = points.filter((p) => p.is_observed).length;
+      const reconstructed = points.filter((p) => p.is_reconstructed).length;
+      $("chart-note").innerHTML =
+        "Точек " + points.length + " · наблюдений " + observed + " · восстановлено " +
+        reconstructed + (series.cached ? ' · <strong>результат из кэша, не живой запрос</strong>' : "");
+    }
+
+    // ---------------------------------------------------------------- аномалии
+    function renderAnomalies(anomalies) {
+      const panel = $("anomaly-panel");
+      const body = $("anomaly-body");
+      panel.hidden = false;
+      const items = anomalies.items || [];
+      const warnings = anomalies.warnings || [];
+
+      let html = "";
+      for (const warning of warnings) {
+        html += '<div class="note warn">' + escapeHtml(warning) + "</div>";
+      }
+
+      if (!items.length) {
+        // Ключевое различение: «событий нет» и «нечего сравнить» — разные состояния.
+        // Отсутствие событий при недостатке истории нельзя показывать как норму.
+        const insufficient = warnings.some((w) => w.indexOf("INSUFFICIENT_REFERENCE_YEARS") === 0);
+        html += insufficient
+          ? '<div class="note warn">Событий не найдено, <strong>но истории недостаточно</strong> ' +
+            "для сравнения. Это не подтверждение нормы.</div>"
+          : '<div class="note">Негативных событий не найдено в выбранном периоде.</div>';
+        body.innerHTML = html;
+        return;
+      }
+
+      html += "<table><tr><th>Период</th><th>Тяжесть</th><th>Признаки</th></tr>";
+      for (const event of items) {
+        const codes = (event.reason_codes || []).map(escapeHtml).join("<br>");
+        html += "<tr><td>" + event.start_date + "<br>— " + event.end_date +
+                '<br><span class="muted">' + (event.duration_days || "?") + " дн.</span></td>" +
+                "<td>" + escapeHtml(event.severity) + "<br>" +
+                '<span class="muted">оценка ' + event.score.toFixed(3) + "</span></td>" +
+                "<td>" + codes + "</td></tr>";
+      }
+      html += "</table>";
+
+      // `confidence` не называется вероятностью и не рисуется процентом: producer
+      // объявляет её эвристической поддержкой, а не калиброванной вероятностью.
+      if (anomalies.confidence_semantics) {
+        html += '<div class="note">Показатель <code>confidence</code> — эвристическая ' +
+                "поддержка события, а не вероятность аномалии (" +
+                escapeHtml(anomalies.confidence_semantics) + ").</div>";
+      }
+      html += '<div class="note">Совпадение с погодными признаками не означает причину: ' +
+              "детектор описывает совпадения, а не устанавливает причинно-следственную связь.</div>";
+      body.innerHTML = html;
+    }
+
+    // ---------------------------------------------------------------- происхождение
+    function renderProvenance(provenance, series, job) {
+      const panel = $("provenance-panel");
+      const body = $("provenance-body");
+      panel.hidden = false;
+      let html = "<table>";
+      html += "<tr><td>модель</td><td><code>" + escapeHtml(job.model_version || "—") + "</code></td></tr>";
+      html += "<tr><td>пайплайн</td><td><code>" + escapeHtml(job.pipeline_version || "—") + "</code></td></tr>";
+      for (const entry of (provenance.entries || [])) {
+        html += "<tr><td>источник</td><td>" + escapeHtml(entry.provider) + " · " +
+                escapeHtml(entry.collection_id) +
+                (entry.cached ? ' <span class="badge">кэш</span>' : "") + "</td></tr>";
+      }
+      if (series.data_retrieved_at) {
+        html += "<tr><td>данные получены</td><td>" +
+                new Date(series.data_retrieved_at).toLocaleString("ru-RU") + "</td></tr>";
+      }
+      html += "</table>";
+      // Ограничение модели проговаривается в интерфейсе, а не только в README:
+      // владелец C-04 прямо предупреждает, что на переносе в будущий сезон ансамбль
+      // проигрывает простому baseline, и умолчать об этом на демо нельзя.
+      html += '<div class="note">Перенос на будущий сезон — слабое место модели: ' +
+              "на временном режиме проверки ансамбль уступает простому baseline. " +
+              "Для дат за пределами обучающего периода результат следует считать ориентировочным.</div>";
+      body.innerHTML = html;
+    }
+
+    function escapeHtml(value) {
+      return String(value === null || value === undefined ? "" : value)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // ---------------------------------------------------------------- кнопки
+    $("btn-draw").onclick = () => {
+      state.drawing = true;
+      state.draft = [];
+      refreshDraft();
+      $("draw-hint").hidden = false;
+      $("btn-cancel").disabled = false;
+      $("btn-finish").disabled = true;
+      if (!state.map) {
+        alert("Карта недоступна без сети, нарисовать контур нельзя. " +
+              "Поля, созданные раньше, остаются доступными для анализа.");
+      }
+    };
+    $("btn-cancel").onclick = () => {
+      state.drawing = false;
+      state.draft = [];
+      refreshDraft();
+      $("draw-hint").hidden = true;
+      $("btn-cancel").disabled = true;
+    };
+    $("btn-finish").onclick = async () => {
+      const ring = state.draft.slice();
+      $("btn-cancel").click();
+      if (ring.length >= 3) await createPolygon(ring);
+    };
+    $("btn-delete").onclick = deleteSelected;
+    $("btn-analyse").onclick = startAnalysis;
+
+    renderHealth();
+    setInterval(renderHealth, 15000);
+    initMap();
+    loadPolygons();
+  })();
   </script>
 </body>
 </html>
