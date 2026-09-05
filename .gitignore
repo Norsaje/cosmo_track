@@ -13,6 +13,8 @@ htmlcov/
 # Local Python environments and secrets
 .venv/
 venv/
+.dl-venv/
+.uv-cache/
 .env
 .env.*
 !.env.example
@@ -20,6 +22,11 @@ venv/
 # Jupyter temporary files
 .ipynb_checkpoints/
 
+# Local scratch worktrees (coordination clone, review checkouts)
+/tmp/
+/.coord-main/
+
+# --- ML artifacts ---
 # Kaggle upload files. Rebuild them with artifacts/ml/package_kaggle.py.
 /artifacts/ml/kaggle/*.ipynb
 /artifacts/ml/kaggle/package_manifest.json
@@ -39,3 +46,13 @@ venv/
 # Resumable tuning state
 /artifacts/ml/**/*.sqlite3
 /artifacts/ml/**/cache/
+
+# --- DL artifacts ---
+# Per-fold research checkpoints полного прогона: воспроизводимы из manifest +
+# seed. Публикуются OOF по seed, experiments.csv, cv_report.json и
+# learning_curves.json — они содержат все числа отчёта.
+/artifacts/dl/cv_tcn_v1/seed_*_fold_*/
+
+# Kaggle upload bundle: rebuild with configs/dl/kaggle/package_dataset.py
+/artifacts/dl/kaggle_bundle/
+/artifacts/dl/kaggle_bundle.zip

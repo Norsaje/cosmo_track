@@ -1,0 +1,1 @@
+experiment_id,model,commit,data_fingerprint,fold_version,mask_version,seed,window,channels,params_json,epoch,rmse,gap_score,unseen_rmse,hard_rmse,source_s2_rmse,source_landsat_rmse,source_modis_rmse,coverage_80,width_80,train_sec,infer_sec,peak_vram_mb,artifact_mb,decision,notes

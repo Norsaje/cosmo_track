@@ -1,0 +1,37 @@
+{
+  "schema_version": "0.1",
+  "algorithm_version": "robust-loyo-events-0.1.1",
+  "events": [
+    {
+      "start_date": "2020-05-21",
+      "end_date": "2020-06-12",
+      "severity": "critical",
+      "score": 2.8599999999999994,
+      "confidence": 1.0,
+      "min_robust_z": -3.25,
+      "negative_area": 2.8599999999999994,
+      "observed_points": 12,
+      "reconstructed_points": 0,
+      "reason_codes": [
+        "LOW_PRECIPITATION",
+        "HIGH_TEMPERATURE",
+        "MULTISENSOR_CONFIRMATION",
+        "PROLONGED_SUPPRESSION"
+      ],
+      "explanation_ru": "Снижение NDVI совпадает с осадками ниже сезонной нормы; температурой выше сезонной нормы; подтверждением снижения независимыми датчиками; продолжительным отклонением от сезонной нормы. Сочетание сигналов согласуется с водным стрессом. Причинность не доказана; confidence отражает поддержку данными, а не вероятность причины.",
+      "algorithm_version": "robust-loyo-events-0.1.1",
+      "duration_days": 23,
+      "schema_version": "0.1"
+    }
+  ],
+  "warnings": [],
+  "confidence_semantics": "heuristic_support_not_calibrated_probability",
+  "case_kind": "synthetic_proxy_not_real_accuracy",
+  "truth_interval": [
+    "2020-05-21",
+    "2020-06-12"
+  ],
+  "event_iou": 1.0,
+  "earliest_support_delay_days": 2,
+  "delay_caveat": "Retrospective detector; earliest support is not a measured online alarm delay"
+}

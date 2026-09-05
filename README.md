@@ -119,3 +119,30 @@ PYTHONPATH=src python artifacts/ml/evaluate_baselines.py
 [журнал запусков](reports/experiments.csv),
 [проблемы контракта данных](reports/data_contract_issues.md) и
 [сводка метрик для графиков](reports/model_metrics.csv).
+
+## DL-эксперимент: residual TCN и детекция аномалий
+
+DL-часть — отдельный кандидат в ансамбль и владелец anomaly-подсистемы. Она
+использует **те же** folds, MaskSpec и baseline OOF, что и ML: собственных
+разбиений не создаёт. Внедрение возможно только через adoption gate;
+production-путь работает без PyTorch.
+
+| Путь | Содержимое |
+|---|---|
+| `src/veg_recovery/dl/` | window adapter, сезонный prior, TCN, runner, отчётность |
+| `src/veg_recovery/dl/c03_bridge.py` | мост к опубликованным folds/MaskSpec ML |
+| `src/veg_recovery/dl/expert.py` | DL за общим интерфейсом `NDVIReconstructor` |
+| `src/veg_recovery/anomalies/` | `advanced/events/explain` поверх `ndvi_harmonized` |
+| `configs/dl/kaggle/` | сборка Kaggle Dataset и notebook для GPU-прогона |
+| `reports/dl_decision.md` | результаты, ограничения и решение по gate |
+
+После слияния веток отдельный worktree ML не нужен — источник C-03 берётся
+из этого же дерева:
+
+```bash
+PYTHONPATH=src python -m veg_recovery.dl.c03_bridge --ml-root . --output artifacts/dl/c03_derived
+PYTHONPATH=src python -m veg_recovery.dl.train --fold-manifest artifacts/dl/c03_derived/dl_c03.json --preflight-only
+PYTHONPATH=src python -m pytest -q tests/dl tests/anomalies
+```
+
+Статус задач и зависимостей команды: `00_team_coordination.md` в ветке `main`.
