@@ -2,7 +2,12 @@
 
 Это **не** новая схема фолдов или собственный MaskSpec. DL runner принимает
 обёртку над артефактами ML. Если фактический handoff отличается, меняется DL
-consumer, а не ML-owned folds. Сейчас реальные C-03 файлы ещё не опубликованы.
+consumer, а не ML-owned folds. Обновление: ML@39a8f73 публикует outer folds и baseline
+OOF в другом формате; их реальный read-only adapter — `veg_recovery.dl.ml_handoff`.
+Все 16 folds/metrics проверены. Нижеследующий training manifest остаётся **draft**:
+inner/train mask policy не согласована, точный producer context C/D пока не перенесён
+в training runner. Не генерировать accepted manifest простой фильтрацией raw keys.
+Подробности: `reports/dl_integration_review.md`.
 
 JSON `dl_c03.json`:
 

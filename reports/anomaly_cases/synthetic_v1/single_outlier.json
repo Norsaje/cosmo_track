@@ -1,6 +1,6 @@
 {
   "schema_version": "0.1",
-  "algorithm_version": "robust-loyo-events-0.1.0",
+  "algorithm_version": "robust-loyo-events-0.1.1",
   "events": [],
   "warnings": [],
   "confidence_semantics": "heuristic_support_not_calibrated_probability",

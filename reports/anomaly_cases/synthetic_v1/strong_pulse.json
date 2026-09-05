@@ -1,6 +1,6 @@
 {
   "schema_version": "0.1",
-  "algorithm_version": "robust-loyo-events-0.1.0",
+  "algorithm_version": "robust-loyo-events-0.1.1",
   "events": [
     {
       "start_date": "2020-05-21",
@@ -19,7 +19,7 @@
         "PROLONGED_SUPPRESSION"
       ],
       "explanation_ru": "Снижение NDVI совпадает с осадками ниже сезонной нормы; температурой выше сезонной нормы; подтверждением снижения независимыми датчиками; продолжительным отклонением от сезонной нормы. Сочетание сигналов согласуется с водным стрессом. Причинность не доказана; confidence отражает поддержку данными, а не вероятность причины.",
-      "algorithm_version": "robust-loyo-events-0.1.0",
+      "algorithm_version": "robust-loyo-events-0.1.1",
       "duration_days": 23,
       "schema_version": "0.1"
     }

@@ -2,8 +2,16 @@
 
 Статус: **PENDING_EVALUATION** для DL-импутации; **REVIEW** для C-06/C-09 draft.
 Production candidate не экспортирован. Решения ADOPT/ENSEMBLE_ONLY/REJECT пока
-невозможны: в исходном main нет C-01, C-03 и ML-008 OOF. Числа ~0.06 из задания
-не считаются воспроизведённой baseline. ML submission не зависит от DL.
+невозможны: ещё нет DL OOF по согласованной training policy и доступного final ML
+ensemble OOF для сравнения. Числа ~0.06 из задания не считаются воспроизведённой
+baseline. ML submission не зависит от DL.
+
+**Обновление после нового fetch:** ML@39a8f73 уже публикует C-01/MaskSpec/folds/baseline
+OOF, Backend@350faec — SH-002. Они ещё не интегрированы в main. Выполнен реальный
+consumer review всех 16 folds/13 317 OOF keys и равенства baseline metrics.
+См. [integration review](dl_integration_review.md): остаются DL inner/train mask policy,
+адаптация training runner к точному контексту C/D и доступ к final ML ensemble OOF.
+Найден воспроизводимый EOL/SHA256 дефект загрузки ML bundle на Windows.
 
 ## Проверенная постановка и данные
 
@@ -42,9 +50,9 @@ Backend; текущие проверки используют существую
 | DL-001/002, C-06 | `src/veg_recovery/dl/data.py`, `tests/dl/test_data.py` | REVIEW, CSV fallback; нужен alignment с реальным C-01/C-03 |
 | DL-003 | `models/tcn.py`, `training.py`, `train.py`, `predict.py`, `artifacts.py` | CPU fixture проверяется; реальные метрики ждут C-03 |
 | DL-004 preparation | `models/pypots.py`, tests | Только public impute adapter и X/X_ori alignment; сами BRITS/SAITS ещё не обучены и библиотека не установлена |
-| OOF harness | `evaluation.py`, `configs/dl/c03_consumer.md` | Strict keys/labels, equality, subgroup metrics, polygon bootstrap, fail-closed gate; consumer draft требует ML review |
+| OOF harness | `evaluation.py`, `ml_handoff.py`, `configs/dl/c03_consumer.md` | Проверены реальные ML folds, keys/labels и baseline metric equality; training policy/consumer ещё требуют ML review |
 | DL-007/008/009/010, C-09 | `anomalies/events.py`, `advanced.py`, `explain.py` | REVIEW, чистый CPU API; Backend acknowledgement pending |
-| Anomaly evidence | `reports/anomaly_cases/synthetic_v1/` | 3 события и 4 negative controls, только synthetic proxies |
+| Anomaly evidence | `reports/anomaly_cases/synthetic_v1/`, `real_2024/` | 7 synthetic cases + 39 real polygon diagnostics; 3 сильных/3 сомнительных PNG просмотрены, экспертный review pending |
 | Kaggle | `configs/dl/kaggle/run_tcn.ipynb` | Подготовлен, на Kaggle не запускался; требует C-03 и проверку версии runtime |
 
 TCN: три bidirectional dilated Conv1d блока, missing/invalid masks, календарь,
@@ -113,10 +121,30 @@ explanation_ru, schema/algorithm version. `score = negative_area * confidence`.
 confidence не вероятность; p10-p90 reference не prediction interval; detector
 ретроспективный. Широкий reconstruction interval ослабляет сигнал. Без допустимой
 истории возвращается `INSUFFICIENT_REFERENCE_YEARS`, не заключение «поле нормально».
-Change-point, phenology alignment, pooling tuning и ручной review реальных
-3 сильных/3 сомнительных случаев ещё не выполнены.
+Change-point, phenology alignment и pooling tuning ещё не выполнены. Визуальный
+R&D review 3 сильных/3 сомнительных реальных случаев выполнен агентом в
+`reports/anomaly_cases/real_2024/review.md`; экспертное принятие ML/Backend pending.
+
+## Дополнительный результат реального anomaly аудита
+
+Reference/calibration обучены на 2010–2023; диагностический query — 2024, все
+39 train polygons. 91 candidate event, включая 12 algorithmic critical.
+Это не число подтверждённых повреждений. В графиках видны риски фенофазы,
+севооборота/типа культуры и межсенсорного расхождения. На синхронных парах 2024
+sensor alignment MAE относительно S2 снизился с 0.05338 до 0.02655 для Landsat
+(319 пар) и с 0.09949 до 0.06634 для MODIS (139 пар). Это **не primary NDVI OOF**.
+
+Версия anomaly 0.1.1 исправляет false source switches на календарных NaN и
+ложные uncertainty warnings для естественных пропусков. Кэш LOYO summaries
+сбрасывается при каждом fit. `analyze(frame)` возвращает scored points и events
+за один проход. Реальный скоринг 39 polygons занял 36.81 s CPU; первый вызов
+включает cache warmup, параллельно работали тесты, поэтому это не SLA benchmark.
 
 ## Команды
+
+Финальная локальная проверка: **60 tests passed in 25.02s**, Ruff passed.
+Дополнительно отдельно выполнен ML consumer audit всех 16 реальных folds;
+это не добавлено к числу unit tests и не является DL обучением.
 
 PowerShell из корня репозитория:
 
@@ -124,8 +152,9 @@ PowerShell из корня репозитория:
 $env:PYTHONPATH='src'
 python -m pytest -q tests/dl tests/anomalies -p no:cacheprovider
 python -m ruff check src/veg_recovery/dl src/veg_recovery/anomalies tests/dl tests/anomalies --no-cache
-python -m veg_recovery.dl.train --smoke --seeds 17 42 73 --epochs 3 --window 15 --hidden-size 16 --layers 2 --output artifacts/dl/cpu_smoke_v1
+python -m veg_recovery.dl.train --smoke --seeds 17 42 73 --epochs 3 --window 15 --hidden-size 16 --layers 2 --output artifacts/dl/new_cpu_smoke
 python -m veg_recovery.dl.anomaly_cases --output reports/anomaly_cases/synthetic_v1
+python -m veg_recovery.dl.real_anomaly_cases --year 2024 --output reports/anomaly_cases/real_2024
 ```
 
 Для повторного smoke используйте новый output path: существующий checkpoint
@@ -136,11 +165,19 @@ TCN — дополнительно torch; графики — matplotlib; tests �
 Для Kaggle: инструкция и notebook в `configs/dl/kaggle/`.
 `--preflight-only` с C-03 проверяет fingerprint/keys/metrics до импорта torch.
 
+Опубликованный CPU smoke evidence: `artifacts/dl/cpu_smoke_v2/`, source commit
+`a4f2563` plus per-source SHA256. 3 seed, 3 epochs, fixture model 3 769 parameters,
+weights 18 991 bytes per seed, save/load max abs error 0. Fixture inner RMSE
+0.002503/0.002598/0.001633 — **не конкурсный результат и не DL adoption evidence**.
+`reports/dl_experiments.csv` пока содержит только schema: реальные CV experiments
+ещё не выполнены; synthetic smoke хранится отдельно во избежание смешения метрик.
+
 ## Следующий наиболее ценный опыт
 
-ML передаёт C-01, apply_mask/MaskSpec, frozen fit/inner/outer/context keys,
-linear/HGB/final ensemble OOF с исходными метриками. Принимаем реальный формат
-на границе DL consumer. Затем одна TCN-конфигурация на 3 seed CPU или Kaggle;
+ML подтверждает уже опубликованные C-01/apply_mask/outer folds, предоставляет
+inner/train-target policy и отсутствующие final ensemble OOF с исходными метриками.
+В DL runner переносим проверенное producer context censoring C/D. Затем одна
+TCN-конфигурация на 3 seed CPU или Kaggle;
 Huber/MSE, window 61/91/121 — только после equality gate на тех же folds.
 Параллельно Backend может интегрировать C-09 draft и подтвердить JSON smoke.
 До review ни одна задача не помечается DONE и процент CP не увеличивается.

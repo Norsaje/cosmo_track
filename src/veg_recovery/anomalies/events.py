@@ -5,7 +5,7 @@ from datetime import date
 import math
 
 SCHEMA_VERSION = "0.1"
-ALGORITHM_VERSION = "robust-loyo-events-0.1.0"
+ALGORITHM_VERSION = "robust-loyo-events-0.1.1"
 REASON_CODES = frozenset(
     {
         "LOW_PRECIPITATION",

@@ -275,6 +275,8 @@ class RobustClimatology:
     def __init__(self, config: AnomalyConfig | None = None):
         self.config = config or AnomalyConfig()
         self.reference: pd.DataFrame | None = None
+        self._groups = {}
+        self._summary_cache = {}
 
     def fit(self, reference: pd.DataFrame):
         ref = _validate(reference)
@@ -289,6 +291,17 @@ class RobustClimatology:
         ref["_year"] = ref.date.dt.year
         ref["_season_day"] = _season_day(ref.date)
         self.reference = ref
+        self._groups = {("global", "*"): ref}
+        self._groups.update(
+            {("crop", key): group for key, group in ref.groupby("crop_type")}
+        )
+        self._groups.update(
+            {
+                ("polygon", key): group
+                for key, group in ref.groupby(["anon_polygon_id", "crop_type"])
+            }
+        )
+        self._summary_cache = {}
         return self
 
     def _summary(self, ref):
@@ -306,6 +319,21 @@ class RobustClimatology:
         )
         return quantiles, scale, int(years)
 
+    def _summary_at(self, year, day, level, key):
+        cache_key = year, int(day), level, key
+        if cache_key not in self._summary_cache:
+            ref = self._groups.get((level, key))
+            summary = None
+            if ref is not None:
+                distance = np.abs(ref._season_day - day)
+                subset = ref.loc[
+                    (ref._year != year)
+                    & (np.minimum(distance, 366 - distance) <= self.config.doy_radius)
+                ]
+                summary = self._summary(subset)
+            self._summary_cache[cache_key] = summary
+        return self._summary_cache[cache_key]
+
     def predict(self, frame: pd.DataFrame) -> pd.DataFrame:
         if self.reference is None:
             raise RuntimeError("Fit climatology on explicit reference first")
@@ -318,13 +346,7 @@ class RobustClimatology:
             if key in cache:
                 rows.append(cache[key])
                 continue
-            ref = self.reference
-            distance = np.abs(ref._season_day - day)
-            ref = ref.loc[
-                (ref._year != row.date.year)
-                & (np.minimum(distance, 366 - distance) <= self.config.doy_radius)
-            ]
-            global_summary = self._summary(ref)
+            global_summary = self._summary_at(row.date.year, day, "global", "*")
             if global_summary is None:
                 result = {
                     "expected_ndvi": np.nan,
@@ -336,17 +358,11 @@ class RobustClimatology:
             else:
                 quantiles, scale, years = global_summary
                 level = "global"
-                for name, subset in (
-                    ("crop", ref.loc[ref.crop_type == row.crop_type]),
-                    (
-                        "polygon",
-                        ref.loc[
-                            (ref.anon_polygon_id == row.anon_polygon_id)
-                            & (ref.crop_type == row.crop_type)
-                        ],
-                    ),
+                for name, group_key in (
+                    ("crop", row.crop_type),
+                    ("polygon", (row.anon_polygon_id, row.crop_type)),
                 ):
-                    local = self._summary(subset)
+                    local = self._summary_at(row.date.year, day, name, group_key)
                     if local is not None:
                         weight = local[2] / (local[2] + self.config.pooling_years)
                         quantiles = weight * local[0] + (1 - weight) * quantiles
@@ -405,7 +421,8 @@ class AdvancedAnomalyDetector:
             )
         if (sigma < 0).any() or np.isinf(sigma).any():
             raise ValueError("Uncertainty must be nonnegative and finite when supplied")
-        unknown_uncertainty = ~points.is_observed & sigma.isna()
+        reconstructed = ~points.is_observed & np.isfinite(points.ndvi_harmonized)
+        unknown_uncertainty = reconstructed & sigma.isna()
         sigma = sigma.fillna(0)
         points["residual"] = points.ndvi_harmonized - points.expected_ndvi
         points["robust_z"] = points.residual / points.climatology_scale
@@ -420,11 +437,22 @@ class AdvancedAnomalyDetector:
         points["multisensor_confirmation"] = agreement.astype(bool)
         switches = pd.Series(False, index=points.index)
         if "selected_source" in points:
-            previous = points.groupby("anon_polygon_id").selected_source.shift()
+            has_source = (
+                points.selected_source.notna()
+                & ~points.selected_source.isin(["unknown", "missing", ""])
+                & np.isfinite(points.ndvi_harmonized)
+            )
+            # Календарный пропуск не является сменой сенсора. Сравниваем с предыдущим
+            # доступным измерением, не с предыдущей строкой регулярной сетки.
+            available = points.selected_source.where(has_source)
+            previous = (
+                available.groupby(points.anon_polygon_id)
+                .ffill()
+                .groupby(points.anon_polygon_id)
+                .shift()
+            )
             switches = (
-                previous.notna()
-                & points.selected_source.notna()
-                & points.selected_source.ne(previous)
+                previous.notna() & has_source & points.selected_source.ne(previous)
             )
         if "source_switch_risk" in points:
             if not points.source_switch_risk.isin([True, False]).all():
@@ -459,8 +487,12 @@ class AdvancedAnomalyDetector:
         return points
 
     def detect(self, frame: pd.DataFrame) -> DetectionResult:
+        return self.analyze(frame)[1]
+
+    def analyze(self, frame: pd.DataFrame) -> tuple[pd.DataFrame, DetectionResult]:
+        """Скоринг и события за один проход; UI/отчётам не нужен повторный расчёт."""
         if frame.empty:
-            return DetectionResult((), ("EMPTY_SERIES",))
+            return pd.DataFrame(), DetectionResult((), ("EMPTY_SERIES",))
         if "anon_polygon_id" not in frame or frame.anon_polygon_id.nunique() != 1:
             raise ValueError(
                 "detect accepts exactly one polygon; call separately per polygon"
@@ -471,7 +503,11 @@ class AdvancedAnomalyDetector:
             warnings.append("INSUFFICIENT_REFERENCE_YEARS")
         if points.ndvi_harmonized.isna().any():
             warnings.append("MISSING_HARMONIZED_VALUES")
-        if (~points.is_observed & points.confidence.le(0.2)).any():
+        if (
+            ~points.is_observed
+            & np.isfinite(points.ndvi_harmonized)
+            & points.confidence.le(0.2)
+        ).any():
             warnings.append("LOW_RECONSTRUCTION_SUPPORT")
         groups, current = [], []
         for index, row in points.iterrows():
@@ -498,7 +534,7 @@ class AdvancedAnomalyDetector:
             event = self._event(points.loc[ids])
             if event is not None:
                 events.append(event)
-        return DetectionResult(tuple(events), tuple(warnings))
+        return points, DetectionResult(tuple(events), tuple(warnings))
 
     def _event(self, rows):
         cfg = self.config

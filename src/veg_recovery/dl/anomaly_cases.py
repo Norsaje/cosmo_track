@@ -35,8 +35,7 @@ def generate_cases(destination):
     )
     for name in names:
         query, truth = anomaly_case(name)
-        points = detector.score_points(query)
-        result = detector.detect(query)
+        points, result = detector.analyze(query)
         points.to_csv(output / f"{name}.csv", index=False)
         payload = result.to_dict()
         payload["case_kind"] = "synthetic_proxy_not_real_accuracy"

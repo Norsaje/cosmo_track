@@ -183,6 +183,49 @@ def test_unknown_crop_global_reference_cannot_alone_be_critical(detector):
     assert all(event.severity != "critical" for event in result.events)
 
 
+def test_natural_calendar_gaps_are_not_source_switches_or_reconstructions(detector):
+    query, _ = anomaly_case("normal")
+    missing = query.index % 3 != 0
+    query.loc[missing, "ndvi_harmonized"] = np.nan
+    query.loc[missing, "is_observed"] = False
+    query.loc[missing, "selected_source"] = "unknown"
+    points, result = detector.analyze(query)
+    assert not points.source_switch_risk.any()
+    assert "LOW_RECONSTRUCTION_SUPPORT" not in result.warnings
+    query.loc[query.index >= 36, "selected_source"] = "modis"
+    points = detector.score_points(query)
+    assert points.source_switch_risk.sum() == 1
+    assert points.loc[36, "source_switch_risk"]
+
+
+def test_climatology_cache_is_reset_on_refit():
+    query, _ = anomaly_case("normal")
+    detector = AdvancedAnomalyDetector().fit(anomaly_reference())
+    first = detector.score_points(query)
+    again = detector.score_points(query)
+    np.testing.assert_array_equal(first.expected_ndvi, again.expected_ndvi)
+    reference = anomaly_reference()
+    reference["ndvi_harmonized"] += 0.2
+    detector.fit(reference)
+    changed = detector.score_points(query)
+    np.testing.assert_allclose(changed.expected_ndvi - first.expected_ndvi, 0.2)
+
+
+def test_events_invariant_to_empty_calendar_rows(detector):
+    query, _ = anomaly_case("strong_pulse")
+    sparse = query.iloc[::3].copy()
+    dense = query.copy()
+    missing = ~dense.index.isin(sparse.index)
+    dense.loc[missing, "ndvi_harmonized"] = np.nan
+    dense.loc[missing, "is_observed"] = False
+    dense.loc[missing, "selected_source"] = "unknown"
+    a = detector.detect(sparse)
+    b = detector.detect(dense)
+    assert [event.to_dict() for event in a.events] == [
+        event.to_dict() for event in b.events
+    ]
+
+
 def test_core_import_does_not_import_torch():
     code = """
 import sys
