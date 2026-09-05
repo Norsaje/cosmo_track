@@ -183,3 +183,26 @@ def test_field_without_data_source_cannot_start_analysis(page: str) -> None:
     assert "анализ недоступен" in page
     # В списке полей отсутствие источника видно сразу, а не только при выборе.
     assert "без данных" in page
+
+
+def test_service_indicator_appears_only_on_trouble(page: str) -> None:
+    """В норме индикатор состояния скрыт.
+
+    Постоянно зелёный значок не несёт информации: глаз перестаёт его замечать
+    ровно к тому моменту, когда он впервые становится важным. Уведомление должно
+    появляться как отклонение, а не висеть всегда.
+    """
+    assert "chip.hidden = true" in page
+    assert "нет соединения с сервисом" in page
+    # Позитивного состояния в интерфейсе больше нет.
+    assert "сервис готов" not in page
+
+
+def test_service_indicator_is_announced_to_screen_readers(page: str) -> None:
+    """Появление уведомления должно быть озвучено, а не только показано.
+
+    Индикатор возникает без действия пользователя, поэтому без aria-live человек,
+    работающий со скринридером, о потере связи просто не узнает.
+    """
+    assert 'aria-live="polite"' in page
+    assert 'role="status"' in page

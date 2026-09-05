@@ -293,8 +293,12 @@
       <b>cosmo_track</b>
       <span>восстановление NDVI и негативные аномалии</span>
     </div>
-    <span id="health-chip" class="chip chip-default" style="margin-left:auto" role="status">
-      <i class="dot"></i><span id="health-text">проверяю сервис…</span>
+    <!-- Индикатор появляется только при проблеме. Постоянно зелёный значок не несёт
+         информации: глаз перестаёт его замечать ровно к тому моменту, когда он
+         впервые становится важным. aria-live озвучивает появление скринридеру. -->
+    <span id="health-chip" class="chip chip-danger" style="margin-left:auto"
+          role="status" aria-live="polite" hidden>
+      <i class="dot"></i><span id="health-text"></span>
     </span>
   </header>
 
@@ -420,20 +424,30 @@
     // ReferenceError обрывает скрипт — страница мертва при полностью живом API.
     async function renderHealth() {
       const chip = $("health-chip");
+      const show = (className, text) => {
+        chip.className = "chip " + className;
+        // Состояние всегда словом, а не только цветом чипа (§8.9 ТЗ).
+        $("health-text").textContent = text;
+        chip.hidden = false;
+      };
       try {
-        const body = await (await fetch("/health/ready")).json();
-        const map = { ok: "chip-success", degraded: "chip-warning", down: "chip-danger" };
-        chip.className = "chip " + (map[body.status] || "chip-default");
+        const response = await fetch("/health/ready");
+        if (!response.ok) { show("chip-danger", "сервис отвечает ошибкой"); return; }
+        const body = await response.json();
         const broken = ["database", "redis", "model_bundle"]
           .filter((key) => body[key] !== "ok")
           .map((key) => ({ database: "БД", redis: "очередь", model_bundle: "модель" })[key]);
-        // Состояние всегда словом, а не только цветом чипа (§8.9 ТЗ).
-        $("health-text").textContent = broken.length
-          ? "проблемы: " + broken.join(", ")
-          : "сервис готов";
+        if (!broken.length) {
+          // Всё в порядке — молчим. Отсутствие уведомления и есть сообщение
+          // «работает»; лишний значок в шапке только отвлекает от карты.
+          chip.hidden = true;
+          return;
+        }
+        show("chip-warning", "недоступно: " + broken.join(", "));
       } catch (error) {
-        chip.className = "chip chip-danger";
-        $("health-text").textContent = "API недоступен";
+        // fetch падает при обрыве сети, остановленном сервере и закрытом порте —
+        // для пользователя это одно и то же: связи с сервисом нет.
+        show("chip-danger", "нет соединения с сервисом");
       }
     }
 
