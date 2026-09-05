@@ -575,12 +575,6 @@
        карточкой. Фиксированная раскладка держит колонки в ширине родителя,
        а разрыв внутри слова не даёт длинному коду распереть колонку. */
     .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    /* Технические оговорки нужны, но не первым, что видит человек: в свёрнутом
-       виде они не спорят с результатом за внимание и остаются в один клик. */
-    details.tech { border: var(--divider-weight) solid var(--divider); border-radius: var(--radius-md);
-                   padding: 8px 10px; margin-bottom: 8px; font-size: var(--font-tiny); color: var(--muted); }
-    details.tech summary { cursor: pointer; min-height: 24px; }
-    details.tech > div { margin-top: 6px; }
     table { width: 100%; border-collapse: collapse; font-size: var(--font-tiny); table-layout: fixed; }
     th, td { text-align: left; padding: 6px 8px; border-bottom: var(--divider-weight) solid var(--divider);
              vertical-align: top; overflow-wrap: anywhere; word-break: break-word; hyphens: auto; }
@@ -1814,12 +1808,6 @@
       const items = anomalies.items || [];
       const warnings = anomalies.warnings || [];
       let html = "";
-      if (warnings.length) {
-        html += '<details class="tech"><summary>технические замечания детектора (' +
-          warnings.length + ")</summary>";
-        for (const warning of warnings) html += "<div>" + esc(warning) + "</div>";
-        html += "</details>";
-      }
       if (!items.length) {
         // «Событий нет» и «сравнивать не с чем» — разные состояния. Отсутствие
         // события при недостатке истории нельзя показывать как подтверждённую норму.
