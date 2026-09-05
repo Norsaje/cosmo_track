@@ -105,9 +105,17 @@ def test_causality_is_not_asserted(page: str) -> None:
 
 
 def test_cached_result_is_marked(page: str) -> None:
-    """Инвариант 10 и решение D-005: выдавать кэш за live запрещено."""
+    """Инвариант 10 и решение D-005: выдавать кэш за live запрещено.
+
+    Проверяется наличие пометки, а не её формулировка: текст короче прежнего,
+    но кэшированный результат по-прежнему помечен и в сводке ряда, и в таблице
+    происхождения. Проверка на `series.cached` и `entry.cached` — на то, что
+    пометка привязана к флагу источника, а не нарисована безусловно.
+    """
     assert "cached" in page
-    assert "из кэша" in page
+    assert "series.cached ?" in page
+    assert "entry.cached ?" in page
+    assert page.count(">кэш<") >= 2
 
 
 def test_model_limitation_is_visible(page: str) -> None:

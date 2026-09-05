@@ -558,11 +558,33 @@
     .legend span { display: inline-flex; align-items: center; gap: 6px; }
     .legend svg { flex: none; }
     #chart { width: 100%; height: 200px; display: block; touch-action: pan-y; }
+    /* 200px хватает, чтобы увидеть форму ряда, но не деталь: на полугоде
+       наблюдений точки сливаются. Развёрнутый режим отдаёт графику почти
+       весь экран, не уводя человека на отдельную страницу. */
+    #chart.chart-expanded { height: 70vh; }
+    .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .card-head h2 { margin: 0; }
+    .btn-ghost { flex: none; padding: 4px 10px; font-size: var(--font-tiny);
+                 background: var(--content2); color: var(--fg); border: var(--divider-weight) solid var(--divider);
+                 border-radius: var(--radius-md); cursor: pointer; min-height: 32px; }
     .chart-summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
 
     /* ---------------------------------------------------------------- таблицы */
-    table { width: 100%; border-collapse: collapse; font-size: var(--font-tiny); }
-    th, td { text-align: left; padding: 6px 8px; border-bottom: var(--divider-weight) solid var(--divider); vertical-align: top; }
+    /* Раскладка auto растягивала таблицу под самое длинное слово: пояснение
+       детектора и коды признаков уезжали за правый край экрана вместе с
+       карточкой. Фиксированная раскладка держит колонки в ширине родителя,
+       а разрыв внутри слова не даёт длинному коду распереть колонку. */
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    /* Технические оговорки нужны, но не первым, что видит человек: в свёрнутом
+       виде они не спорят с результатом за внимание и остаются в один клик. */
+    details.tech { border: var(--divider-weight) solid var(--divider); border-radius: var(--radius-md);
+                   padding: 8px 10px; margin-bottom: 8px; font-size: var(--font-tiny); color: var(--muted); }
+    details.tech summary { cursor: pointer; min-height: 24px; }
+    details.tech > div { margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: var(--font-tiny); table-layout: fixed; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: var(--divider-weight) solid var(--divider);
+             vertical-align: top; overflow-wrap: anywhere; word-break: break-word; hyphens: auto; }
+    .col-period { width: 30%; } .col-grade { width: 30%; } .col-signs { width: 40%; }
     th { color: var(--muted); font-weight: 500; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--font-tiny); }
 
@@ -725,7 +747,10 @@
         </div>
 
         <div class="card" id="chart-card" hidden>
-          <h2>Ряд NDVI</h2>
+          <div class="card-head">
+            <h2>Ряд NDVI</h2>
+            <button type="button" class="btn-ghost" id="chart-expand" aria-expanded="false">развернуть</button>
+          </div>
           <div class="legend" aria-hidden="true">
             <span><svg width="16" height="10"><circle cx="8" cy="5" r="3" fill="var(--series-observed)"></circle></svg>наблюдение</span>
             <span><svg width="16" height="10"><line x1="0" y1="5" x2="16" y2="5" stroke="var(--series-reconstructed)" stroke-width="2" stroke-dasharray="4 3"></line></svg>восстановлено моделью</span>
@@ -748,7 +773,7 @@
           <div id="provenance-body"></div>
         </div>
 
-        <div class="alert alert-warning" id="tiles-note" hidden>
+        <div class="alert alert-default" id="tiles-note" hidden>
           <div id="tiles-note-text"></div>
         </div>
       </div>
@@ -1449,7 +1474,7 @@
       // ошибке через несколько секунд, — обещание, которое интерфейс не выполнит.
       $("btn-analyse").disabled = !series;
       if (!series) {
-        showJob('<div class="alert alert-warning"><div>У поля нет привязки к ряду ' +
+        showJob('<div class="alert alert-default"><div>У поля нет привязки к ряду ' +
           "наблюдений, анализ недоступен. Спутниковые провайдеры ещё не подключены — " +
           "создайте поле заново и выберите ряд.</div></div>", 0, null);
       } else {
@@ -1542,7 +1567,7 @@
         let job;
         try { job = await (await api("/jobs/" + jobId)).json(); } catch (error) { return; }
         const partial = job.partial
-          ? '<div class="alert alert-warning"><div>Данные неполные: часть источников ' +
+          ? '<div class="alert alert-default"><div>Данные неполные: часть источников ' +
             "не ответила. Результат построен на том, что удалось получить.</div></div>" : "";
         showJob(partial, job.progress, job.state);
         if (job.state === "COMPLETED") { clearInterval(state.poll); loadResults(analysisId, job); }
@@ -1583,6 +1608,9 @@
     // сети, а внешний CDN — единственная часть страницы, которая может не загрузиться.
     function drawChart(series, anomalies) {
       const svg = $("chart");
+      // Разворот меняет высоту, а вся геометрия считается от clientHeight:
+      // перерисовать нужно тем же рядом, поэтому он сохраняется.
+      state.lastChart = { series: series, anomalies: anomalies };
       svg.innerHTML = "";
       const points = (series.points || []);
       if (!points.length) {
@@ -1734,7 +1762,7 @@
           (point.method ? '<span class="chip chip-default">метод ' + esc(point.method) + "</span>" : "") +
           (point.ndvi_climatology_mean !== null && point.ndvi_climatology_mean !== undefined
             ? '<span class="chip chip-default">норма ' + point.ndvi_climatology_mean.toFixed(3) + "</span>" : "") +
-          (flags.length ? '<span class="chip chip-warning"><i class="dot"></i>' +
+          (flags.length ? '<span class="chip chip-default">' +
             esc(flags.join(", ")) + "</span>" : "");
       };
       svg.addEventListener("pointermove", move);
@@ -1752,8 +1780,17 @@
         '<span class="chip chip-default">' + points.length + " дней</span>" +
         '<span class="chip chip-success"><i class="dot"></i>' + observed + " наблюдений</span>" +
         '<span class="chip chip-primary"><i class="dot"></i>' + reconstructed + " восстановлено</span>" +
-        (series.cached ? '<span class="chip chip-warning"><i class="dot"></i>результат из кэша, не живой запрос</span>' : "");
+        (series.cached ? '<span class="chip chip-default">кэш</span>' : "");
     }
+
+    $("chart-expand").addEventListener("click", () => {
+      const svg = $("chart"), btn = $("chart-expand");
+      const expanded = svg.classList.toggle("chart-expanded");
+      btn.textContent = expanded ? "свернуть" : "развернуть";
+      btn.setAttribute("aria-expanded", expanded ? "true" : "false");
+      if (state.lastChart) drawChart(state.lastChart.series, state.lastChart.anomalies);
+      if (expanded) svg.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
 
     // ---------------------------------------------------------------- аномалии
     // Категории тяжести C-09 — закрытое множество из трёх значений у производителя,
@@ -1777,22 +1814,26 @@
       const items = anomalies.items || [];
       const warnings = anomalies.warnings || [];
       let html = "";
-      for (const warning of warnings) {
-        html += '<div class="alert alert-warning"><div>' + esc(warning) + "</div></div>";
+      if (warnings.length) {
+        html += '<details class="tech"><summary>технические замечания детектора (' +
+          warnings.length + ")</summary>";
+        for (const warning of warnings) html += "<div>" + esc(warning) + "</div>";
+        html += "</details>";
       }
       if (!items.length) {
         // «Событий нет» и «сравнивать не с чем» — разные состояния. Отсутствие
         // события при недостатке истории нельзя показывать как подтверждённую норму.
         const insufficient = warnings.some((w) => w.indexOf("INSUFFICIENT_REFERENCE_YEARS") === 0);
         html += insufficient
-          ? '<div class="alert alert-warning"><div>Событий не найдено, <b>но истории ' +
+          ? '<div class="alert alert-default"><div>Событий не найдено, <b>но истории ' +
             "недостаточно</b> для сравнения. Это не подтверждение нормы.</div></div>"
           : '<div class="alert alert-success"><div>Негативных событий в выбранном периоде ' +
             "не найдено.</div></div>";
         $("anomaly-body").innerHTML = html;
         return;
       }
-      html += "<table><tr><th>Период</th><th>Тяжесть</th><th>Признаки</th></tr>";
+      html += '<div class="table-wrap"><table><tr><th class="col-period">Период</th>' +
+        '<th class="col-grade">Тяжесть</th><th class="col-signs">Признаки</th></tr>';
       for (const event of items) {
         const grade = severityChip(event.severity);
         html += "<tr><td>" + esc(event.start_date) + "<br>— " + esc(event.end_date) +
@@ -1810,7 +1851,7 @@
             : "") +
           "</td></tr>";
       }
-      html += "</table>";
+      html += "</table></div>";
       // Версия алгоритма показывается всегда: результаты 0.1.0 и 0.1.1 различаются,
       // и без неё нельзя понять, чем именно получены события на экране.
       const versions = Array.from(new Set(items.map((e) => e.algorithm_version).filter(Boolean)));
@@ -1829,23 +1870,23 @@
     // ---------------------------------------------------------------- провенанс
     function renderProvenance(provenance, series, job) {
       $("provenance-card").hidden = false;
-      let html = "<table>";
+      let html = '<div class="table-wrap"><table>';
       html += "<tr><th>модель</th><td><code>" + esc(job.model_version || "—") + "</code></td></tr>";
       html += "<tr><th>пайплайн</th><td><code>" + esc(job.pipeline_version || "—") + "</code></td></tr>";
       for (const entry of (provenance.entries || [])) {
         html += "<tr><th>источник</th><td>" + esc(entry.provider) + " · " + esc(entry.collection_id) +
-          (entry.cached ? ' <span class="chip chip-warning"><i class="dot"></i>кэш</span>' : "") + "</td></tr>";
+          (entry.cached ? ' <span class="chip chip-default">кэш</span>' : "") + "</td></tr>";
       }
       if (series.data_retrieved_at) {
         html += "<tr><th>получено</th><td>" +
           new Date(series.data_retrieved_at).toLocaleString("ru-RU") + "</td></tr>";
       }
-      html += "</table>";
+      html += "</table></div>";
       // Ограничение модели проговаривается в интерфейсе, а не только в README.
       // Формулировка описывает работающую модель (смесь LightGBM и спутниковых
       // экспертов из model/), а не прежний бандл: скрытые ответы организаторов
       // нам недоступны, поэтому качество измерено только локально.
-      html += '<div class="alert alert-warning"><div>Качество измерено локально: ' +
+      html += '<div class="alert alert-default"><div>Качество измерено локально: ' +
         "RMSE 0.0543 на development и 0.0561 на audit против 0.0918 у полусуммы " +
         "соседей. Скрытые ответы организаторов недоступны, официальный балл не " +
         "измерялся — оценка локальная. Проверка шла на 20 полигонах нового test, " +
