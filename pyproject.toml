@@ -68,6 +68,12 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.4",
     "mypy>=1.9",
+    # matplotlib запрошен Разработчиком 2 в reports/dl_integration_review.md: им нужны
+    # PNG к anomaly-кейсам, и просьба была именно «в reporting/dev extra, не в runtime
+    # core». В core он не попадает намеренно — базовый `import veg_recovery` обязан
+    # оставаться лёгким. Нижняя граница 3.8, а не проверенный DL 3.10.0: точная версия
+    # фиксируется lock-файлом, а зажимать её в extra значит ломать чужие окружения.
+    "matplotlib>=3.8",
 ]
 
 # ВНИМАНИЕ: console-scripts `veg-recovery` и `batch` здесь намеренно НЕ объявлены.

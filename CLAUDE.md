@@ -38,12 +38,23 @@ bash infra/sync_instructions.sh      # дрейф инструкций → об�
 | `sync_instructions.sh` вернул ДРЕЙФ | **Стоп.** Сначала актуализировать промпт по §1, только потом задача. |
 | Незакоммиченные локальные правки | Показать список, не затирать. |
 
-### Известное состояние на 2026-09-04
+### Известное состояние на 2026-09-05
 
-- `backend` = `e1e3ac1` — является предком `main`.
-- `main` = `6d5e5fa`; в нём есть, а у нас нет: `00_team_coordination.md` (корень),
+- `backend` = `HEAD` = `origin/backend` = `350faec`, FF ok. Merge-base с `main` — `e1e3ac1`;
+  в `main` нет двух наших коммитов: `dc38204` (правила + детектор дрейфа) и `350faec` (скелет BE-001).
+- `main` = `7e4381b`. Разошедшиеся с нами файлы — только документы teamlead: `00_team_coordination.md`,
   `docs/01_ml_developer.md`, `docs/02_dl_developer.md`, `docs/ed_part.md`.
-- Живые ветки: `main`, `backend`, `ML`, `DL`, `ED`.
+- Ветки ролей: `ML` = `39a8f73`, `DL` = `44f2f5b`, `ED` = `0162b48`, **`models` = `3384de9`**.
+  **Рабочий код ML и DL уже опубликован в их ветках, но не смержен в `main`.**
+- **Ветка `models` — поставка C-04** (`add trained NDVI model`, ветвится от `ML@39a8f73`).
+  Она долго оставалась незамеченной: `git branch -r` её не показывал, а детектор дрейфа
+  перечислял пять веток жёстко. Урок записан в §1: список веток сверяем с `gh api .../branches`,
+  а не с локальными remote-ref'ами, которые отражают лишь то, что мы уже фетчили. Читаем его через `git show origin/<ветка>:<путь>`
+  или изолированный `git worktree add --detach tmp/<имя> <sha>`; копий чужого кода в нашу ветку не делаем.
+- ML **удалил** `docs/01_ml_developer.md` и `used_prompts/r&d.md` из своей ветки (`39a8f73`).
+  Актуальная копия ТЗ ML живёт только в `main`, поэтому все ссылки вида `docs/01_ml_developer.md:NNN`
+  в этом файле действительны для `origin/main`, а не для `origin/ML`. Источник истины по
+  фактическому поведению ML — теперь **код** в `origin/ML`, а не строки ТЗ.
 - Расхождение имён: координационный файл ссылается на `03_backend_developer.md` и
   `04_beginner_developer.md`, фактически это `docs/BACKEND.md` и `docs/ed_part.md`. При правке ссылок — согласовать с teamlead, самим не переименовывать.
 
@@ -65,9 +76,14 @@ bash infra/sync_instructions.sh accept           # зафиксировать с
 
 Отслеживаются: `00_team_coordination.md` и любые `*coordination|instruction|prompt|task|spec*.md`
 в корне, `NN_*.md`, всё `docs/*.md|*.pdf`, `used_prompts/*.md`, `CLAUDE.md`, `AGENTS.md`, `README.md`,
-`.claude/*.md` — в ветках `main`, `backend`, `ML`, `DL`, `ED`. Ветки ролей отслеживаются намеренно:
+`.claude/*.md` — в ветках `main`, `backend`, `ML`, `DL`, `ED`, **`models`**. Ветки ролей отслеживаются намеренно:
 ТЗ появляется там раньше, чем в `main`, и это ранний сигнал о будущем breaking change.
 Состояние зафиксировано в `infra/instructions.lock` (`<ref> <path> <blob-sha>`).
+
+**Список веток — не константа.** `origin/models` существовала и не отслеживалась, потому что
+`REFS` был захардкожен, а `git branch -r` показывает только уже зафетченные ветки. Перед
+доверием списку выполняем `gh api repos/Norsaje/cosmo_track/branches --jq '.[].name'` либо
+`git ls-remote --heads origin`; новая ветка → добавить в `REFS` и заново пройти §1.
 
 ### Процедура актуализации
 
@@ -155,57 +171,94 @@ CHANGES_REQUESTED · DONE · REJECTED.
 OPTIONAL (не ждём) · REVIEW (нужна проверка владельца).
 **Версионирование (§4):** `0.x` — интерфейс может меняться, но breaking change записывается заранее;
 `1.0` — frozen для MVP; добавление optional JSON-поля совместимо; переименование, удаление или
-смена типа — несовместимы. Все контракты сейчас `0.1 planned` / `NOT_STARTED`.
+смена типа — несовместимы. Утверждение «все контракты `0.1 planned`/`NOT_STARTED`» устарело:
+C-01/C-02 у producer уже `1.0` (team freeze pending), C-09 — `schema 0.1 / algorithm 0.1.1`,
+наш C-07 — `0.1 draft`. Актуальный срез — в таблице §4.1.
 
 ### 4.1. Контракты: что производим и что потребляем
 
-| ID | Артефакт | Владелец | Путь по координации | Тип | Наша роль |
-|---|---|---|---|---|---|
-| C-07 | API schemas и job states | **мы** | `apps/api/schemas/` | HARD | производим; потребители — фронт и smoke-тесты Beginner |
-| C-08 | Shared model integration in worker | **мы** | `service/orchestrator.py` | HARD | производим |
-| C-13 | Provider-normalized ObservationFrame | **мы** | `providers/base.py` | HARD для live web | производим; **reviewer — ML** |
-| C-15 | Demo runbook/checklist | **мы + Beginner** | `docs/demo_runbook.md` | HARD для CP-5 | производим **совместно**, не единолично |
-| C-01 | DataContract и canonical `DailyFrame` | ML | `src/veg_recovery/contracts.py` | HARD | потребляем; **изменение только после review DL и Backend** |
-| C-02 | `ReconstructionRequest/Result`, `NDVIReconstructor` | ML | `src/veg_recovery/inference.py` | HARD | потребляем |
-| C-04 | Final ML bundle + manifest/hash | ML | `artifacts/ml/final_bundle/` | HARD | потребляем |
-| C-05 | ML diagnostics schema | ML | `contracts.py` | SOFT | потребляем; fallback — пустые optional diagnostics |
-| C-09 | AnomalyEvent schema/detector | DL | `src/veg_recovery/anomalies/` | HARD для CP-4 | потребляем; public contract согласуется с нами |
-| C-12 | Tiny fixtures + manifest | Beginner | `tests/fixtures/` | SOFT | потребляем; **мы соreviewer вместе с ML** |
-| C-11 | Independent submission validator | Beginner | `scripts/validate_submission.py` | REVIEW | входит в наш demo-preflight |
+Колонка «Факт» — состояние на `main` = `7e4381b` (обновлено самим DL, не только teamlead).
 
-C-02 дословно (`docs/01_ml_developer.md:209-222`) — **ModelStub обязан повторять именно это**:
+| ID | Артефакт | Владелец | Путь | Тип | Факт на 2026-09-05 | Наша роль |
+|---|---|---|---|---|---|---|
+| C-07 | API schemas и job states | **мы** | `apps/api/schemas/` | HARD | **0.1 draft · REVIEW: branch publication observed, DL не проверял API** (`backend@350faec`) | производим; потребители — фронт и smoke-тесты Beginner |
+| C-08 | Shared model integration in worker | **мы** | `service/orchestrator.py` | HARD | 1.0 planned · NOT_STARTED | производим |
+| C-13 | Provider-normalized ObservationFrame | **мы** | `providers/base.py` | HARD для live web | NOT_STARTED | производим; **reviewer — ML** |
+| C-15 | Demo runbook/checklist | **мы + Beginner** | `docs/demo_runbook.md` | HARD для CP-5 | NOT_STARTED | производим **совместно**, не единолично |
+| C-01 | DataContract и canonical `DailyFrame` | ML | `contracts.py`, `data/io.py` | HARD | **producer 1.0, team freeze pending · REVIEW: DL read/window alignment passed** (`ML@39a8f73`) | потребляем; изменение — только после review DL и Backend |
+| C-02 | `ReconstructionRequest/Result`, `NDVIReconstructor` | ML | `inference.py` | HARD | **producer 1.0, team freeze pending · REVIEW: Backend integration pending** — ждут именно нас | потребляем |
+| C-03 | Frozen folds, MaskSpec, baseline OOF | ML | `configs/ml/folds_v1.csv`, `artifacts/ml/baseline_v1/` | HARD | folds_v1 / real_test_v1 · REVIEW (DL проверил 16 folds) | нас не касается напрямую; источник parity-фикстур |
+| C-04 | Final ML bundle + manifest/hash | ML | `artifacts/ml/ndvi_backend_handoff_v1/` в ветке **`models`** | HARD | **ОПУБЛИКОВАН** (`models@3384de9`): `bundle_kind: trained`, `model_version: p0-catboost-gpu-v1`, эталоны на 3 112 строк, `verify_handoff.py` | потребляем |
+| C-05 | ML diagnostics schema | ML | `contracts.py` | SOFT | фактически реализован как `DiagnosticRow` (16 полей) | потребляем; fallback — пустые optional diagnostics |
+| C-06 | WindowDatasetAdapter | DL | `dl/data.py` | INTERNAL | 0.1 draft · REVIEW | не потребляем |
+| C-09 | AnomalyEvent schema/detector | DL | `src/veg_recovery/anomalies/` | HARD для CP-4 | **schema 0.1 / algorithm 0.1.1 · REVIEW: Backend ack pending** — ждут именно нас | потребляем; public contract согласуется с нами |
+| C-12 | Tiny fixtures + manifest | Beginner | `tests/fixtures/` | SOFT | 1.0 planned · NOT_STARTED в координации, фактически в `ED` | потребляем; **мы соreviewer вместе с ML** |
+| C-11 | Independent submission validator | Beginner | `scripts/validate_submission.py` | REVIEW | NOT_STARTED | входит в наш demo-preflight |
+
+**Два контракта ждут именно нашего acknowledgement — C-02 (Backend integration pending) и
+C-09 (Backend ack pending).** Пока мы их не приняли, ни ML, ни DL не могут закрыть свои задачи.
+Принятие по §20 — это запущенный contract/smoke test и заполненный handoff, а не «прочитали».
+
+C-02 **фактически опубликован кодом** (`git show origin/ML:src/veg_recovery/contracts.py`),
+и ModelStub обязан повторять именно опубликованное, а не строки ТЗ:
 
 ~~~python
+SCHEMA_VERSION = "1.0"
+KEY_COLUMNS = ["anon_polygon_id", "date"]
+SUBMISSION_COLUMNS = KEY_COLUMNS + ["primary_ndvi_pred"]
+
 @dataclass(frozen=True)
 class ReconstructionRequest:
     frame: pd.DataFrame
     gap_mask: pd.Series
     context_mode: Literal["competition", "web"]
 
-
 @dataclass(frozen=True)
 class ReconstructionResult:
-    predictions: pd.DataFrame  # ключи, primary_ndvi_pred, lower, upper, method
-    diagnostics: pd.DataFrame  # source probabilities, distances, disagreement, fallback_reason
+    predictions: pd.DataFrame
+    diagnostics: pd.DataFrame
     model_version: str
 
-
+@runtime_checkable
 class NDVIReconstructor(Protocol):
     def predict(self, request: ReconstructionRequest) -> ReconstructionResult: ...
 ~~~
 
-Веб-путь всегда шлёт `context_mode="web"`. **Единственный протокол предсказателя — `NDVIReconstructor`.**
-`PredictionExpert` в ТЗ ML отсутствует; он назван один раз в `docs/02_dl_developer.md:176` как формулировка DL
-и владельца не имеет — как контракт не используем, вопрос к teamlead открыт.
+Что добавилось сверх ТЗ и обязано быть учтено в C-07/C-08:
 
-До C-02/C-04 работаем с **ModelStub** того же интерфейса. Содержимое заглушки — официальный ориентир
-ТЗ ML: `mean two neighbors` (`docs/01_ml_developer.md:302`). Никакой fallback не имеет права вернуть NaN
-(`:315`), ML-логику в API переписывать нельзя (`:501`). ModelStub обязан быть выключен в production.
+- **`PredictionRow` — 8 полей**, а не четыре: `anon_polygon_id`, `date`, `primary_ndvi_pred`,
+  `lower`, `upper`, `method`, **`primary_ndvi_reconstructed`**, **`ndvi_harmonized`**.
+  `model_config = ConfigDict(extra="forbid", allow_inf_nan=False)`.
+- **`DiagnosticRow` — 16 полей**: `p_s2`/`p_landsat`/`p_modis`/`p_unknown` (сумма = 1 ± 1e-6),
+  `left_distance_days`/`right_distance_days` (**`float | None`**, в JSON — `null`, не `inf`),
+  `model_disagreement`, `fallback_reason`, `context_quality`, `source_confidence`,
+  `quality_flags: list[str]`, `interval_status`, `interval_level`, `harmonization_status`.
+  Это и есть фактический C-05 — отдельной схемы ждать не нужно.
+- **`ReconstructionPayload`** — «JSON-safe DTO for backend; DataFrames stay inside the Python
+  boundary», `schema_version: Literal["1.0"]`, конструируется `ReconstructionPayload.from_result(result)`.
+  Это готовая граница между worker и API: **DataFrame через HTTP не отдаём**, свою параллельную
+  DTO не изобретаем. Changelog ML прямо просит: «Integrators should approve the DTO schema».
+- **`validate_request` отвергает** (это требования к нашему orchestrator, не рекомендации):
+  отсутствие колонок `{anon_polygon_id, date, primary_ndvi, crop_type}` — **`crop_type` обязателен
+  и на веб-пути**; `gap_mask` не `pd.Series` или с индексом, не равным индексу фрейма; не-bool dtype
+  или NaN в маске; неуникальный индекс фрейма; tz-aware или ненормализованные даты; дубликаты ключей;
+  пустой `anon_polygon_id`. В `competition` дополнительно требуется bool-колонка `is_synthetic_gap`,
+  **точно равная маске**. Фрейм копируется — молчаливого выравнивания индексов не будет.
+- `method` принимает значения `mean_neighbors` / `oof_ensemble` / `conservative_blend`,
+  `fallback_reason` — включая `nonfinite_model_prediction` и `oof_conservative_gate`.
+  В API это `str`, без `Literal`/`Enum` — по той же причине, что и `reason_codes`.
+- Веб-путь всегда шлёт `context_mode="web"`. **Единственный протокол предсказателя — `NDVIReconstructor`.**
+  `PredictionExpert` в опубликованном коде отсутствует; как контракт не используем.
+
+До C-04 работаем с **ModelStub** того же интерфейса *или* с реально опубликованным baseline-бандлом
+(§4.5). Никакой fallback не имеет права вернуть NaN (`docs/01_ml_developer.md:315`), ML-логику в API
+переписывать нельзя (`:501`). ModelStub обязан быть выключен в production.
 
 C-09 `AnomalyEvent` — 12 полей, `reason_codes: tuple[str, ...]`. **Список кодов открытый**: ТЗ DL нигде
 не объявляет его исчерпывающим. `Literal`/`Enum` в API-схеме и CHECK/enum в БД по `reason_codes` запрещены —
 хранить jsonb, неизвестный код рендерить как есть. Переход к закрытому списку — только после заморозки
 C-09 1.0 и оформленного Decision.
+
 
 ### 4.2. Наша очередь задач — это граф, а не цепочка
 
@@ -256,100 +309,191 @@ observed/reconstructed/uncertainty/anomaly`, `Полигон можно найт
 `Provider failure имеет retry/partial/cache fallback`. CP-5 — clean install, `docker compose up --build`,
 offline CI без сети/GPU, README с batch/web командами, `C-15 runbook принят`, red-team review.
 
-### 4.5. Текущее состояние команды (`main` = `97a2497`, `DL` = `a4f2563`, `ED` = `5fabb1f`, 2026-09-05)
+### 4.5. Текущее состояние команды (`main` = `7e4381b`, `ML` = `39a8f73`, `DL` = `44f2f5b`, `ED` = `0162b48`)
 
-Статус проекта в координации переведён в **IN_PROGRESS**. Dashboard:
+Проект `IN_PROGRESS`. Teamlead переписал шапку прогресса: «Принятая интегрированная реализация
+(без draft на review)» — **0 %**; 10 % теперь означают «CP-0 принят, остальные checkpoints ещё
+не приняты», и отдельной строкой: «DL draft уже реализован в ветке DL и передан на review;
+это не означает готовность общей модели/приложения или прохождение CP-1».
+**Наличие файлов в чужой ветке не переводит задачу в DONE — ни чужую, ни нашу.**
 
 | Роль | Статус | Текущая задача | Блокер |
 |---|---|---|---|
-| ML | READY | ML-001 DataContract | нет |
-| DL | **IN_PROGRESS** | DL-001/002 adapter и leakage tests; DL-007/008 anomaly contract/fixtures | C-01/C-03 и ML-008 не опубликованы |
-| Backend (мы) | READY | BE-001 skeleton | ModelStub разрешён |
+| ML | REVIEW: публикация обнаружена DL; owner acknowledgement pending | C-01/C-02, folds и baseline OOF в `ML@39a8f73` | B-DL-003: EOL/hash bundle; final GPU OOF не опубликован |
+| DL | WAITING_DEPENDENCY / REVIEW | DL-001/002 real ML consumer review; DL-007…010 real anomaly cases | train/inner policy, final ML OOF, SH-002 clean-install |
+| **Backend (мы)** | **REVIEW: публикация обнаружена DL; owner acknowledgement pending; 0 % принятых** | **BE-001 skeleton и SH-002 в `backend@350faec`**; следующий handoff — C-07 и H-SH-002 | ModelStub разрешён; shared lock integration/review |
 | Beginner | READY | JR-001 Data-quality report | нет |
 
-**На нас заведён блокер — B-DL-002, owner: Backend:**
-`pyproject.toml/uv.lock отсутствуют; extra dl ещё не определён`, due «до clean-install gate».
-DL прямо пишет: «SH-002 принадлежит Backend: shared dependencies/lock не изменяем; подготовим
-точный handoff». То есть менять `pyproject.toml` за нас никто не будет, а их dependency proposal
-придёт к нам. Закрытие блокера — часть BE-001/SH-002, и по нему нужен handoff в сторону DL.
+Наш статус выставил **не teamlead, а DL**, обнаружив нашу ветку через fetch. «REVIEW: branch
+publication observed, DL не проверял API» означает ровно одно: draft увиден, но не отревьюен.
+Сдвинуть его дальше может только наш собственный handoff по C-07.
 
-Второй блокер, B-DL-001 (owner ML), нас не касается напрямую, но объясняет, почему C-09 придёт
-раньше сравнимых DL-метрик.
+#### Главное: ML опубликовал реальные C-01/C-02/C-03 и загружаемый bundle
 
-Что это меняет в нашем плане:
+`origin/ML` = `39a8f73` содержит `src/veg_recovery/{contracts,inference}.py`, `data/io.py`,
+`features/builder.py`, `models/{bundle,manifest,estimators,calibration,training,baselines}.py`,
+`validation/{folds,masking,metrics}.py`, `cli/batch.py`, `anomalies/baseline.py`,
+`configs/ml/folds_v1.csv` и `artifacts/ml/baseline_v1/` (24 файла). Схема разобрана в §4.1.
+Практические следствия для нас:
 
-- **DL-007 «C-09 AnomalyEvent draft» уже IN_PROGRESS** и помечен `Blocks: Backend anomaly UI`.
-  Draft появится раньше, чем мы дойдём до BE-012 — следим за `docs/02_dl_developer.md` и
-  `src/veg_recovery/anomalies/`, схему в нашем API правим только через contract decision.
-- **DL-008 synthetic anomaly fixtures IN_PROGRESS**, случаи: negative pulse, source switch, outlier,
-  wide uncertainty. Это готовый fallback для BE-012 и материал для BE-008, свои аномальные
-  фикстуры дублировать не нужно.
-- DL ведёт журнал координации **напрямую в `main` через отдельный worktree**: изменения
-  `00_team_coordination.md` теперь приходят не только от teamlead, и sync по §0 обязателен
-  перед каждым запросом буквально.
+- **`artifacts/ml/CONTRACT_CHANGELOG.md` адресован нам дословно:** «Backend imports
+  `ReconstructionRequest`, `ReconstructionResult`, `NDVIReconstructor` from `veg_recovery.contracts`
+  and `load_reconstructor` from `veg_recovery.inference`. **Load a bundle once at process startup**,
+  then pass an aligned boolean gap mask per call. … `ReconstructionPayload.from_result(result)` is
+  the Pydantic 2 JSON boundary. … **Integrators should approve the DTO schema when connecting their
+  own routes**». Загрузка один раз на старте воркера — теперь требование producer, а не наша догадка.
+- **Опубликованный bundle — не C-04.** Путь `artifacts/ml/baseline_v1/bundle/`
+  (`bundle_kind: "baseline"`, `model_version: "baseline-v1-mean_neighbors"`,
+  `training_status: "no ML estimators trained; baseline statistics only"`, `schema_version 1.0`,
+  `feature_version "ndvi-context-v1"`, seeds `[17,29,43,71,101]`). C-04 `artifacts/ml/final_bundle/`
+  по-прежнему `NOT_STARTED`. Значит `BE-011 «подключить C-04»` объявлять сделанным нельзя,
+  но **BE-003/BE-008 могут работать против реального baseline-бандла вместо ModelStub** —
+  это сильнее заглушки и сразу даёт parity-фикстуру. Отдельный тикет, не самовольство.
+- `load_bundle` отказывает при: `schema_version != "1.0"`, `feature_version != FEATURE_VERSION`,
+  несовпадении состава файлов с `bundle_kind`, неверном `format`, symlink на manifest или файл,
+  файле вне корня бандла, **несовпадении SHA256**. Это уточняет инвариант 6: критериев отказа
+  у producer больше одного, и все они наши `MODEL_SCHEMA_MISMATCH`.
+- **`trained` bundle требует `trusted=True`** — `load_bundle` иначе бросает
+  «Trained bundle requires trusted=True after provenance review». Докстрока producer:
+  «SHA256 detects corruption, not authenticity… a joblib file can execute Python code».
+  Значит в worker флаг доверия — явная настройка окружения с провенанс-проверкой,
+  никогда не значение по умолчанию и никогда не «включить, чтобы заработало».
+- **Фактическая сигнатура batch-CLI отличается от ТЗ** — см. §7.
+- `api_smoke.json`: `{model_version: "baseline-v1-mean_neighbors", n_predictions: 3112,
+  n_diagnostics: 3112, schema_version: "1.0"}` — готовый эталон для нашего smoke-теста.
+- `reports/data_contract_issues.md` подтверждает наши расхождения (`private_features.csv` vs
+  `data/test_data.csv`) и добавляет факт, важный для схем и UI: **target не клипается**,
+  реальный диапазон train до `−2.1303786081`, test до `1.8428536898`. Валидировать NDVI
+  диапазоном `[-1, 1]` в API-схемах и БД **запрещено** — физическая нештатность идёт флагом
+  (`prediction_outside_physical_range` в `quality_flags`), а не отказом 422.
 
-#### C-09 фактически появился в ветке `DL` (не в `main`)
+#### C-04 опубликован в ветке `models` — обученная модель, а не baseline
 
-`origin/DL` = `a4f2563` содержит рабочую реализацию: `src/veg_recovery/anomalies/events.py`
-(`SCHEMA_VERSION = "0.1"`, `ALGORITHM_VERSION = "robust-loyo-events-0.1.0"`), `advanced.py`,
-`explain.py`, плюс `configs/dl/tcn.yaml`, `reports/dl_decision.md`, `reports/dl_experiments.csv`
-и `configs/dl/c03_consumer.md`. Дословный состав, который обязана принимать наша схема:
+`origin/models` = `3384de9` ветвится от `ML@39a8f73` и добавляет
+`artifacts/ml/ndvi_backend_handoff_v1/` — самодостаточный пакет поставки для нас:
 
-- 12 полей ровно как в §7 промпта; `algorithm_version` имеет значение по умолчанию.
-- `severity` — **закрытое множество из трёх значений**: `normal`, `biomass_suppression`, `critical`.
-  Наш `AnomalyOut.severity` остаётся `str`, но UI обязан различать ровно эти три.
-- `reason_codes` — у производителя `frozenset` из **девяти** кодов, и конструктор
-  **бросает `ValueError`** на неизвестном коде: `LOW_PRECIPITATION`, `HIGH_TEMPERATURE`,
-  `LOW_NDWI`, `MULTISENSOR_CONFIRMATION`, `SOURCE_SWITCH_RISK`, `LOW_DATA_COVERAGE`,
-  `RAPID_NEGATIVE_CHANGE`, `PROLONGED_SUPPRESSION`, `PHENOLOGY_SHIFT`.
-  Это ограничение **производителя**, а не контракта: C-09 всё ещё `0.1`, список может вырасти.
-  Наш запрет на `Literal`/`Enum` и `CHECK` по `reason_codes` остаётся в силе — иначе
-  расширение списка у DL уронит наш ответ.
-- Валидация у производителя также требует: событие имеет хотя бы одну опорную точку,
-  все числа конечны, `0 <= confidence <= 1`, `score >= 0`, `negative_area >= 0`.
+- `bundle/` — **`bundle_kind: "trained"`**, `model_version: `p0-catboost-gpu-v1`,
+  `schema_version 1.0`, `feature_version ndvi-context-v1`, `estimators.joblib`.
+  **Требует `trusted=True`** — и README ML это оговаривает: доверие допустимо
+  «только после проверки внешнего SHA256 архива и `MANIFEST.sha256`».
+- `runtime/src/veg_recovery/` — **побайтово тот же код**, что `src/` в `ML@39a8f73`
+  (сверено по sha256 для `contracts.py`, `inference.py`, `features/builder.py`,
+  `models/bundle.py`). Это копия для автономной поставки, не форк.
+- `examples/`: `test_data.csv` (57 185 строк), `expected_submission.csv` (3 112),
+  `expected_diagnostics.csv` — готовый parity-эталон с допуском **1e-10**.
+- `verify_handoff.py` — проверка целостности по `MANIFEST.sha256` и полного инференса.
+- `requirements-runtime.txt` — точные версии: `numpy 2.0.2`, `pandas 2.3.3`, `scipy 1.16.3`,
+  `scikit-learn 1.6.1`, `pydantic 2.12.3`, `joblib 1.5.3`, **`catboost 1.2.10`**.
+  `catboost` в наших extras отсутствовал — это дефект `pyproject.toml`, закрывается в SH-002.
+- `handoff.json`: composite RMSE baseline `0.106699` → catboost `0.099562` →
+  ансамбль **`0.097412`**, веса `0.309550 / 0.690450`.
 
-**Семантика, обязательная для BE-013** (`docs/02_dl_developer.md`, версия 2026-09-05):
-«В C-09 confidence — heuristic support, не калиброванная вероятность anomaly. Недостаточная
-история возвращает diagnostic warning; отсутствие события при недостатке данных нельзя
-интерпретировать как подтверждённую норму». Значит в UI: `confidence` не называем вероятностью
-и не рисуем как процент уверенности; состояние «аномалий нет при недостатке истории» — отдельное
-состояние с предупреждением, а не зелёная норма.
+**Прямые указания ML, которые мы обязаны соблюдать** (`README_BACKEND.md`):
 
-**DL-008 фикстуры готовы** — `reports/anomaly_cases/synthetic_v1/`: семь кейсов
-(`normal`, `mild_pulse`, `medium_pulse`, `strong_pulse`, `single_outlier`, `source_switch`,
-`wide_uncertainty`), каждый с `.csv`, `.json` и `.png`, плюс `summary.json` и `reference.csv`.
-Это готовый вход для BE-012 и материал для BE-008 — своих аномальных фикстур не делаем.
+- «Ветка `models` уже содержит проверенную копию модельных файлов; **дублировать их
+  в рабочей ветке Backend не требуется**» — бандл монтируем по пути, к себе не копируем.
+- Минимальные колонки входа: `anon_polygon_id`, `date`, `crop_type`, `primary_ndvi`;
+  для качества — `s2_*`, `landsat_*`, `modis_*`, `era5_temp_c`, `era5_precip_mm`.
+- «Backend должен сохранять diagnostics и показывать `quality_flags`, особенно для новых
+  полигонов и слабого контекста».
+- Главное ограничение прямым текстом: **«перенос на будущий сезон: в temporal CV ансамбль
+  хуже простого baseline»**. В UI и демо это нельзя замалчивать.
+- `interval_level = 0.95`, но `interval_status` говорит, что интервалы эмпирические
+  и формально не сертифицированы — процентом уверенности их подписывать нельзя.
+- `gate = null` и clip не применяется: значения вне `[-1, 1]` физически возможны
+  (train до −2.1304, видимый test до 1.8429) — ещё одно подтверждение инварианта 4.
 
-Прочее из обновлённого ТЗ DL, что касается нас: полный CUDA-прогон уносится на Kaggle
-(`configs/dl/kaggle/`), «никаких pretrained downloads в runtime»; «unsupported sensor mapping
-не выдаётся за гармонизацию»; до нашего handoff DL работает через `PYTHONPATH=src python ...`,
-и они прямо пишут: «Общий lock принадлежит Backend».
+#### Блокеры
 
-#### Коллизия владения: `pyproject.toml` и `uv.lock` появились в ветке `ED`
+- **B-DL-002 (owner — мы) переформулирован**, но не закрыт: «`backend@350faec` уже публикует
+  pyproject/lock, но DL ещё не выполнил clean-install на нём; Backend/ED shared config collision».
+  Из `reports/dl_integration_review.md`: `dl = [torch]` достаточно, **PyPOTS не добавлять**;
+  **нужен `matplotlib` в reporting/dev extra** (у нас его в `dev` нет — это конкретный дефект
+  нашего `pyproject.toml`); DL локально проверял torch 2.5.1 CPU и «Backend lock с другой версией
+  не объявляем проверенным нами»; `acknowledgement=pending` до clean-install и smoke.
+- **B-DL-003 (owner ML, CHANGES_REQUESTED)** — новый и опасный для нас: в чистом Windows-checkout
+  `load_reconstructor(.../baseline_v1/bundle)` падает `ValueError: SHA256 mismatch: feature_state.json`,
+  потому что Git переписал EOL уже захешированных JSON. Наш вывод: любой наш артефакт с байтовым
+  хешем (bundle, фикстуры parity, demo cache) обязан быть защищён `.gitattributes`, а
+  `MODEL_SCHEMA_MISMATCH`-путь в воркере обязан отличать «несовместимая схема» от «повреждённый
+  транспорт» в тексте ошибки. Проверку хешей не отключаем никогда.
+- B-DL-001 (owner ML + DL consumer) нас не касается напрямую.
 
-`origin/ED` = `5fabb1f` добавляет в корень **`pyproject.toml`, `uv.lock`, `.python-version`,
-`.gitignore`** и `tests/__init__.py` — всё это артефакты SH-002 и наши по §9 и §6 координации.
-Их редакция несовместима с нашей: `[dependency-groups] dev` (PEP 735) вместо
-`[project.optional-dependencies]`, `package = false`, `dependencies = []`, ни одного из шести
-extras `core/ml/dl/geo/web/dev`, `testpaths` только на их каталоги. При мердже обеих веток в
-`main` конфликтуют минимум пять файлов: `pyproject.toml`, `uv.lock`, `.gitignore`,
-`.python-version`, `tests/__init__.py`.
+#### Decisions, добавленные DL (§17)
 
-Чужую ветку не трогаем и молча не «чиним». Это повод для **Decision по §17** с участием
-teamlead: чей `pyproject.toml` остаётся каноническим. Наша позиция подкреплена координацией
-(«SH-002 · Owner: Backend») и самим DL («Общий lock принадлежит Backend»), а наш handoff
-`docs/handoffs/H-SH-002.md` уже опубликован и проверен фактической установкой `--extra dl`.
+`D-DL-001` mask entire allowed context before windowing · `D-DL-002` PENDING_EVALUATION вместо
+REJECT без реального OOF · `D-DL-003` CUDA только на Kaggle · `D-DL-004` stock PyPOTS SAITS.fit
+не является matched-mask воспроизведением · `D-DL-005` C-03 берётся из реального `split_fold`.
+Прямо на нас влияют два:
+
+- **`D-DL-006`** — «byte-hashed artifacts должны переживать Git checkout без EOL rewrite»
+  (см. B-DL-003). DL уже защитил свои `artifacts/dl/.gitattributes` (`-text`).
+- **`D-DL-007`** — «реальные anomaly candidates не считаются размеченной точностью»:
+  91 кандидат, 12 algorithmic critical, экспертной приёмки нет. **BE-013 не имеет права
+  показывать эти события как подтверждённые и заявлять точность детектора.**
+
+#### C-09: algorithm 0.1.1, добавлен `analyze()`
+
+`origin/DL` = `44f2f5b`: `SCHEMA_VERSION = "0.1"` не изменился, `ALGORITHM_VERSION` стал
+**`robust-loyo-events-0.1.1`**. Добавлен `analyze(frame) -> (points, DetectionResult)`,
+`detect()` сохранён, **имена JSON-полей не переименованы**. Правка меняет source-risk/confidence
+для рядов с пустыми календарными строками: «natural calendar NaN больше не дают false sensor
+switches/reconstruction warning». Наш `AnomalyOut` от этого не ломается, но `algorithm_version`
+обязан храниться и показываться — по нему различаются результаты 0.1.0 и 0.1.1.
+
+Состав контракта прежний и остаётся в силе: 12 полей; `severity` — закрытое множество
+`normal` / `biomass_suppression` / `critical` (наш тип `str`, но UI различает ровно эти три);
+`reason_codes` — `frozenset` из девяти кодов у производителя (`LOW_PRECIPITATION`,
+`HIGH_TEMPERATURE`, `LOW_NDWI`, `MULTISENSOR_CONFIRMATION`, `SOURCE_SWITCH_RISK`,
+`LOW_DATA_COVERAGE`, `RAPID_NEGATIVE_CHANGE`, `PROLONGED_SUPPRESSION`, `PHENOLOGY_SHIFT`),
+конструктор бросает `ValueError` на неизвестном коде — но это ограничение **производителя**,
+а не контракта: `Literal`/`Enum` и CHECK/enum по `reason_codes` у нас по-прежнему запрещены.
+Валидация producer: хотя бы одна опорная точка, все числа конечны, `0 <= confidence <= 1`,
+`score >= 0`, `negative_area >= 0`. `confidence` — heuristic support, **не** калиброванная
+вероятность; «нет событий при недостатке истории» — отдельное состояние с warning, не норма.
+
+**Backend action из `reports/dl_integration_review.md` — дословные требования к BE-012/BE-013:**
+
+- `is_reconstructed` у ML **не равно** `is_observed` у C-09: observed выводится из исходного
+  конечного `primary_ndvi` и отсутствия реконструкции; **естественные NaN не являются reconstructed**.
+- Продуктовый `confidence` **не** передавать как cloud QA — это разные величины.
+- `lower`/`upper` в шкале primary **нельзя** выдавать за uncertainty гармонизированной шкалы
+  без соответствующего преобразования.
+- Reference и query обязаны иметь одну calibration/version; смешивать ML median/IQR affine
+  с DL IRLS/pooling в одном вызове детектора запрещено.
+
+**Фикстуры DL готовы и дублировать их не нужно:** `reports/anomaly_cases/synthetic_v1/`
+(семь кейсов, пересобраны под 0.1.1: 3 pulses обнаружены, 0 alerts в 4 negative controls) и
+`reports/anomaly_cases/real_2024/` (6 разобранных кейсов с CSV/JSON/PNG, `review.md`,
+`sensor_alignment.csv`, `polygon_summary.csv`). Это вход BE-012 и материал BE-008.
+
+#### Коллизия владения: `pyproject.toml` и `uv.lock` в ветке `ED`
+
+`origin/ED` добавляет в корень `pyproject.toml`, `uv.lock`, `.python-version`, `.gitignore`,
+`tests/__init__.py` — артефакты SH-002, наши по §9 и §6. Их редакция несовместима с нашей:
+`[dependency-groups] dev` (PEP 735) вместо `[project.optional-dependencies]`, `package = false`,
+`dependencies = []`, ни одного из шести extras `core/ml/dl/geo/web/dev`, `testpaths` только
+на их каталоги. Конфликтуют минимум пять файлов.
+
+Чужую ветку не трогаем и молча не «чиним». Это повод для **Decision по §17** с участием teamlead:
+чей `pyproject.toml` канонический. Наша позиция подкреплена координацией («SH-002 · Owner: Backend»),
+самим DL («Общий lock принадлежит Backend», «коллизию решает владелец Backend») и опубликованным
+handoff `docs/handoffs/H-SH-002.md`. **Дефект нашего handoff:** в поле Git commit там написано
+«не закоммичено, HEAD = e1e3ac1» — DL это заметил; после `350faec` текст неверен и требует правки
+отдельным тикетом.
 
 #### C-12 фикстуры опубликованы в `ED`
 
-`tests/fixtures/` содержит 20 файлов: `train_tiny.csv` (60 строк, 21 колонка, реальный
-`AOI-0002`), `test_tiny.csv` (125 строк, 20 колонок, 5 гэпов), `submission_valid_tiny.csv`,
-`submission_for_test_tiny.csv`, `submission_valid_bom.csv` и одиннадцать `submission_invalid_*`,
-плюс `manifest.json`. Синтетика помечена префиксом `TOY-` (`TOY-RUN-A`, `TOY-CTX-A`).
-В манифесте стоит `design_assumptions_requires_ml_confirmation: true` — допущения ещё
-не подтверждены ML. **Мы соreviewer C-12 вместе с ML**: проверяем репрезентативность
-(single gap, gap run 2–4, one-sided context, unseen polygon) и отсутствие выдуманного
-ground truth. Геометрии в фикстурах нет — полигон для E2E готовим сами в `tests/e2e/`.
+`tests/fixtures/` — 20 файлов: `train_tiny.csv` (60 строк, 21 колонка, реальный `AOI-0002`),
+`test_tiny.csv` (125 строк, 20 колонок, 5 гэпов), `submission_valid_tiny.csv`,
+`submission_for_test_tiny.csv`, `submission_valid_bom.csv`, одиннадцать `submission_invalid_*`
+и `manifest.json`. Синтетика помечена префиксом `TOY-`. В манифесте
+`design_assumptions_requires_ml_confirmation: true` — допущения ещё не подтверждены ML.
+**Мы соreviewer вместе с ML**: проверяем репрезентативность (single gap, gap run 2–4,
+one-sided context, unseen polygon) и отсутствие выдуманного ground truth. Геометрии в фикстурах
+нет — полигон для E2E готовим сами в `tests/e2e/`. Сверяться есть с чем: фактический
+`validate_submission_file` у ML отвергает BOM, не-UTF-8, неверный заголовок, ширину строки ≠ 3,
+дубли и несовпадение порядка ключей — набор `submission_invalid_*` обязан бить в те же случаи.
 
 #### `docs/demo_checklist.md` опубликован в `ED` и ждёт нас
 
@@ -368,23 +512,23 @@ ground truth. Геометрии в фикстурах нет — полигон
   с прямым напоминанием «не скрывать, что результат cached».
 
 Конвенция путей из их чек-листа, которую нам соблюдать: логи демо — `artifacts/demo_<date>/logs/`,
-индекс скриншотов — `docs/screenshots/README.md`.
+индекс скриншотов — `docs/screenshots/README.md`. В `ED@0162b48` рядом появился
+`docs/research_sources.csv`.
 
 Полезные факты из их issue-notes:
 
-- **Иерархия сенсоров измерена независимо**: их data-quality отчёт даёт `match_rate = 1.0`,
-  `max_abs_mismatch = 0.0` для восстановления `primary_ndvi` из S2 → Landsat → MODIS. Это третье
-  независимое подтверждение инварианта 4 (после наших 30 520 и 48 161 у ML).
-- **Расхождение `data/raw/` против `data/` подтверждено ими же** и вынесено как решение
-  «либо переименовать `data/` → `data/raw/`, либо обновить `ed_part.md`». Их скрипты уже
-  используют реальный `data/`. Для нас `data/*.csv` неизменяемы — решение за teamlead.
+- **Иерархия сенсоров измерена независимо**: `match_rate = 1.0`, `max_abs_mismatch = 0.0`
+  для восстановления `primary_ndvi` из S2 → Landsat → MODIS.
+- **Расхождение `data/raw/` против `data/` подтверждено ими же**; их скрипты используют реальный
+  `data/`. Для нас `data/*.csv` неизменяемы — решение за teamlead.
 - **`crop_type` содержит русскоязычные значения** (зерновые, озимая пшеница, пастбища/зерновые,
-  подсолнечник). Это влияет на нашу таблицу `polygons` и на подписи в UI.
+  подсолнечник). Влияет на таблицу `polygons` и подписи в UI. Напоминание: `crop_type` —
+  обязательная колонка `validate_request`, то есть без неё веб-путь к модели просто не пройдёт.
 - Колонка `status` в train — object dtype со значениями вида `active`/`inactive`.
-- Их прогон Sprint 3: `uv run pytest -q` → 131 passed. Версии всех их артефактов — `1.0.0`
-  (`report_schema_version`, три `script_version`, `manifest_schema_version`).
+- Их прогон Sprint 3: `uv run pytest -q` → 131 passed. Версии их артефактов — `1.0.0`.
 
 ---
+
 
 ### 4.4. Протоколы
 
@@ -393,7 +537,13 @@ ground truth. Геометрии в фикстурах нет — полигон
 Input schema · Output schema · Validation command · Test result · Known limitations · **Migration/fallback** ·
 Reviewer · Consumer acknowledgement pending/accepted/rejected · **Updated at UTC**.
 Принят — когда consumer запустил contract/smoke test и поставил `acknowledgement=accepted`.
-Наши handoff в журнале: **H-006** Backend → ML (C-13), **H-009** Backend/Beginner → Team (C-15).
+Наши слоты в журнале §15: **H-006** Backend → ML (C-13, `NOT_STARTED`), **H-009** Backend/Beginner → Team
+(C-15, `NOT_STARTED`) и уже заведённый **H-SH-002** Backend → DL (shared dependencies/lock,
+`REVIEW, DL clean-install ack pending`, `backend@350faec`). Входящие, требующие **нашего**
+acknowledgement: **H-004** DL → Backend (C-09 `schema 0.1 / algorithm 0.1.1`, `REVIEW`, `DL@44f2f5b`,
+проверка `PYTHONPATH=src python -m pytest -q tests/anomalies`) и **H-DL-002** DL → ML/Backend
+(`DL@44f2f5b`, 60 тестов, `reports/dl_integration_review.md`). Отдельного handoff-слота под C-07
+в §15 нет — есть только колонка «следующий handoff» в dashboard; заводя его, согласуем id с teamlead.
 
 **Порядок изменения shared contract (§6, пять шагов):**
 1. владелец создаёт contract decision → 2. contract tests → 3. producer → 4. consumers →
@@ -472,13 +622,28 @@ Teamlead — `00_team_coordination.md`, `docs/0*_*.md`, `docs/ed_part.md`, `docs
    на всех 48 161 видимых target-значениях train+test (`docs/01_ml_developer.md:26`); наши 30 520 — train-подмножество
    (train 30 520 + test 17 641 = 48 161). Третье независимое измерение — data-quality отчёт Разработчика 4:
    `match_rate = 1.0`, `max_abs_mismatch = 0.0` (`docs/demo_checklist.md`, issue-notes). В ТЗ (`docs/case_doc.pdf`) иерархия дословно не записана — это эмпирический
-   факт, а не требование кейса. Гармонизированный ряд живёт отдельным полем `ndvi_harmonized`, не является target
-   и **производится не нами**: ML-014 + `docs/01_ml_developer.md:409` против раздела SENSOR HARMONIZATION у DL —
-   конфликт владения ML↔DL, вопрос к teamlead открыт; сами `geospatial/harmonize.py` не пишем до ответа.
+   факт, а не требование кейса. **Target не клипается**: реальный диапазон train до `−2.1303786081`,
+   test до `1.8428536898` (`ML@39a8f73:reports/data_contract_issues.md`) — валидировать NDVI диапазоном
+   `[-1, 1]` в схемах API и в БД запрещено, нештатное значение помечается флагом, а не отвергается.
+   Гармонизированный ряд живёт отдельным полем `ndvi_harmonized`, не является target и **производится
+   не нами**: фактически его отдаёт ML прямо в `PredictionRow` (`inference.py` → `anomalies/baseline.py:
+   harmonize_values`, плюс диагностика `harmonization_status`), поэтому спор ML↔DL за владение
+   для нас закрыт де-факто в пользу ML — мы храним и показываем колонку и не пишем
+   `geospatial/harmonize.py`. Формального Decision по ML-014 против раздела SENSOR HARMONIZATION
+   у DL по-прежнему нет; вопрос к teamlead остаётся открытым.
 5. Схема `submission.csv` (`anon_polygon_id,date,primary_ndvi_pred`, только `is_synthetic_gap=True`) неизменна.
 6. Модель не дублируется: batch и web зовут один `NDVIReconstructor`; несовместимый bundle → `MODEL_SCHEMA_MISMATCH`.
-   На старте worker проверяем manifest целиком: `schema_version` (единственный критерий отказа), `created_at`,
-   `git_commit`, train fingerprints, `feature_version`, model files с SHA256, seeds, CV summary, package versions
+   Bundle загружается **один раз на старте процесса** — это требование producer
+   (`artifacts/ml/CONTRACT_CHANGELOG.md`), а не наша догадка. Фактический `load_bundle` отказывает
+   не по одному критерию, а по семи: `schema_version != "1.0"`, `feature_version != FEATURE_VERSION`,
+   состав файлов не соответствует `bundle_kind`, неверный `format`, symlink на manifest или файл,
+   файл вне корня бандла, несовпадение SHA256. Все они у нас → `MODEL_SCHEMA_MISMATCH`, но текст
+   ошибки обязан отличать несовместимую схему от повреждённого транспорта (B-DL-003: EOL-переписывание
+   роняет именно SHA256). Проверку хешей не отключаем никогда; наши байтово-хешированные артефакты
+   защищаем `.gitattributes` (D-DL-006). `bundle_kind == "trained"` требует явного `trusted=True`:
+   joblib исполняет код, поэтому доверие — осознанная настройка окружения после провенанс-проверки,
+   не значение по умолчанию. Состав manifest для отчёта: `created_at`, `git_commit`, train fingerprints,
+   `feature_version`, model files с SHA256, seeds, CV summary, package versions
    (`docs/01_ml_developer.md:227`) плюс **preprocessor hash** (`docs/02_dl_developer.md:174`).
 7. Идемпотентность анализа по `geometry_hash + date_range + pipeline_version`; `POST /analyses` → 202 + job_id.
 8. FSM: QUEUED → FETCHING → PREPROCESSING → RECONSTRUCTING → ANALYZING → COMPLETED, плюс PARTIAL и FAILED.
@@ -506,10 +671,16 @@ Teamlead — `00_team_coordination.md`, `docs/0*_*.md`, `docs/ed_part.md`, `docs
 - **Расхождение имён тестового файла:** ТЗ кейса и ТЗ ML называют его `private_features.csv`
   и кладут в `data/raw/`; в репозитории это `data/`+`test_data.csv`, каталога `data/raw/` нет ни в одной ветке.
   Batch-вход обязан принимать имя организаторов. Сами файлы не переименовываем — вопрос к teamlead.
-- Batch-CLI из ТЗ ML (`:121-126`): `uv run veg-recovery batch --input <csv> --model artifacts/ml/final_bundle
-  --output submission.csv`; exit code != 0 при несовпадении ключей, NaN, inf, duplicate, лишней колонке,
-  неверной кодировке или нечисловом prediction (`:440`); submission сохраняется в исходном порядке gap-строк (`:436`).
-  Console-scripts `veg-recovery` и `batch` регистрируются в `pyproject.toml` — это наша зона (SH-002).
+- **Batch-CLI: ТЗ и опубликованный код расходятся.** ТЗ ML (`:121-126`) обещает
+  `uv run veg-recovery batch --input <csv> --model artifacts/ml/final_bundle --output submission.csv`.
+  Фактически в `ML@39a8f73` это `python -m veg_recovery.cli.batch --input <csv> --bundle <dir>
+  --output <csv> --diagnostics <csv> [--trusted-bundle] [--expected-count 3112]`: `--model`
+  переименован в `--bundle`, `--diagnostics` **обязателен**, при ошибке возвращается ровно `2`.
+  Валидация submission у producer уже реализована (`validate_submission_file`): отвергает BOM,
+  не-UTF-8, неверный заголовок, ширину строки ≠ 3, дубли/NaN/inf, bool вместо float и любое
+  несовпадение с упорядоченными ключами synthetic-gap; запись атомарная через временный файл.
+  Console-scripts `veg-recovery` и `batch` регистрируются в `pyproject.toml` — это наша зона (SH-002),
+  и объявлять их можно только после согласования фактических имён флагов с ML.
 - Метрика: `GapScore = round(30 * max(0, 1 - RMSE/0.10), 2)`; 100 баллов суммарно по `docs/criteria.pdf`.
 
 ---
@@ -542,7 +713,7 @@ Teamlead — `00_team_coordination.md`, `docs/0*_*.md`, `docs/ed_part.md`, `docs
 
 ## 10. ЖУРНАЛ АКТУАЛИЗАЦИИ
 
-Версия промпта: **1.5** · Инструкции зафиксированы в `infra/instructions.lock` (28 записей, 5 веток).
+Версия промпта: **1.7** · Инструкции зафиксированы в `infra/instructions.lock` (35 записей, 6 веток).
 
 | Дата UTC | Триггер | Что изменилось в инструкциях | Что переписано у нас |
 |---|---|---|---|
@@ -553,3 +724,5 @@ Teamlead — `00_team_coordination.md`, `docs/0*_*.md`, `docs/ed_part.md`, `docs
 | 2026-09-05 | дрейф: `00_team_coordination.md` в `main` (`97a2497` «docs(coordination): start DL adapters and anomaly work») | Статус проекта READY_TO_START → IN_PROGRESS; DL переведён в IN_PROGRESS по DL-001/002/007/008; заведены блокеры **B-DL-002 (owner — Backend: нет `pyproject.toml`/`uv.lock`, не определён extra `dl`)** и B-DL-001 (owner ML); добавлен Progress update DL от 2026-09-05; DL пишет журнал прямо в `main` через worktree | Добавлен §4.5 «Текущее состояние команды»: dashboard ролей, оба блокера с указанием, что B-DL-002 — наш, влияние DL-007/DL-008 на BE-012 и BE-008, требование сверяться по §0 перед каждым запросом из-за второго пишущего в координацию |
 | 2026-09-05 | дрейф: `docs/02_dl_developer.md` в ветке `DL` (`a4f2563` «feat(dl): add leakage-safe windows, residual TCN and anomaly events»); движение веток `DL` и `ED` | DL переписал ТЗ под фактическую реализацию: добавлен раздел «Уточнения после проверки репозитория 2026-09-05» (маска до windowing, разделение training/inner/outer, composite CV, `PENDING_EVALUATION` вместо `REJECT` без экспериментов, matched-mask bridge для PyPOTS, **confidence как heuristic support, а не вероятность**, LOYO, запрет выдавать sensor mapping за гармонизацию, CUDA на Kaggle, `PYTHONPATH=src` до нашего SH-002, «общий lock принадлежит Backend»). В ветке `DL` появилась реализация C-09 (`anomalies/events.py`, 9 reason codes, severity из трёх значений, `ALGORITHM_VERSION robust-loyo-events-0.1.0`) и семь anomaly-фикстур DL-008. В ветке `ED` появились C-12 (20 файлов `tests/fixtures/`) и **собственные `pyproject.toml`/`uv.lock`/`.gitignore`/`.python-version`** | §4.5 переписан: подраздел о фактическом C-09 с дословным списком девяти reason codes и трёх severity, требование к BE-013 не выдавать `confidence` за вероятность и не считать «нет событий» подтверждённой нормой, готовые фикстуры DL-008 как вход BE-012/BE-008; зафиксирована **коллизия владения SH-002 с веткой `ED`** (пять конфликтующих файлов) как повод для Decision по §17; описан состав C-12 и наша роль соreviewer |
 | 2026-09-05 | новый инструкционный файл `docs/demo_checklist.md` в ветке `ED` (`5fabb1f`) | Разработчик 4 опубликовал стартовый шаблон demo-чек-листа с явной передачей нам: «Финальный чек-лист заполняется Backend-ревьюером». Внутри — незакрытые пункты по миграциям, credentials провайдеров, составу demo cache, трём демо-полигонам, health-эндпоинтам, offline-тайлам, подготовленному анализу, сетевому fallback и основному сценарию; issue-notes с независимым подтверждением иерархии сенсоров (`match_rate=1.0`), расхождением `data/raw/` vs `data/`, русскоязычными значениями `crop_type` и object-dtype колонкой `status` | §4.5 дополнен подразделом о `demo_checklist.md`: перечень адресованных нам TODO как содержание C-15, конвенции путей `artifacts/demo_<date>/logs/` и `docs/screenshots/README.md`, четыре факта из issue-notes; §6 инвариант 4 дополнен третьим независимым измерением иерархии |
+| 2026-09-05 | дрейф: `00_team_coordination.md` в `main` (`4f40520`, `7e4381b`), `README.md` в `ML`; ML удалил `docs/01_ml_developer.md` и `used_prompts/r&d.md` из своей ветки; движение `DL` → `44f2f5b`, `ED` → `0162b48` | Teamlead и **DL** (пишет в координацию напрямую) переписали dashboard: «принятая интегрированная реализация — 0 %», CP-0 принят, draft в ветке ≠ CP-1. Контракты переведены в REVIEW с реальными путями: C-01/C-02 `producer 1.0` (`ML@39a8f73`), C-03 `folds_v1/real_test_v1`, C-06 `0.1 draft`, **C-07 наш — `0.1 draft`, REVIEW, DL не проверял API**, C-09 `schema 0.1 / algorithm 0.1.1`. Наш статус — «REVIEW: публикация обнаружена DL; owner acknowledgement pending», 0 % принятых. Заведены **H-SH-002** (наш, REVIEW) и **H-DL-001/H-DL-002**; **H-004** DL → Backend переведён в REVIEW. **B-DL-002 (owner — мы) переформулирован**: файлы есть, нет clean-install и решения по коллизии с `ED`; новый **B-DL-003** (owner ML): SHA256 mismatch бандла из-за EOL. Добавлены D-DL-001…D-DL-007. ML опубликовал рабочий код C-01/C-02/C-03 и загружаемый baseline-бандл; DL — C-09 0.1.1 с `analyze()`, шесть реальных anomaly-кейсов и consumer review с прямым «Backend action» | §0 «Известное состояние» переписано на 2026-09-05 (SHA всех пяти веток, merge-base `e1e3ac1`, правило читать чужой код через `git show`/worktree, предупреждение что ТЗ ML осталось только в `main`). §4 шапка: снято устаревшее «все контракты `0.1 planned`». §4.1 переписана в таблицу с колонкой «Факт», дословный C-02 заменён **опубликованным кодом**; добавлены `PredictionRow` (8 полей), `DiagnosticRow` (16 полей = фактический C-05), `ReconstructionPayload` как обязательная JSON-граница, полный список отказов `validate_request` (включая обязательный `crop_type` и точное совпадение индекса маски), словари `method`/`fallback_reason`; отмечено, что C-02 и C-09 ждут **нашего** acknowledgement. §4.4: журнал handoff приведён к факту (H-SH-002, H-004, H-DL-002 и отсутствие слота под C-07). §4.5 переписан целиком: новый dashboard, подраздел про реальные C-01/C-02/C-03 и baseline-бандл (`baseline_v1/bundle` ≠ C-04), `trusted=True` для trained, оба блокера, D-DL-006/D-DL-007, C-09 0.1.1 с `analyze()`, дословный «Backend action» DL, дефект нашего H-SH-002 («не закоммичено»), `matplotlib` как недостающий пункт нашего `dev` extra. §6: инвариант 4 дополнен запретом валидировать NDVI диапазоном `[-1,1]` (train до −2.13, test до 1.84) и фиксацией, что `ndvi_harmonized` фактически отдаёт ML; инвариант 6 переписан под семь реальных критериев отказа `load_bundle`, загрузку один раз на старте и `trusted=True`. §7: зафиксировано расхождение batch-CLI (`--bundle`, обязательный `--diagnostics`, exit code 2) с ТЗ. Промпт: §7 «От Dev 1 (ML)» переписан под опубликованный код, §7 «От Dev 2 (DL)» — под 0.1.1, `analyze()` и Backend action, факты о данных дополнены |
+| 2026-09-05 | пользователь указал на ветку **`models`**, которой не было в нашем списке; `gh api .../branches` подтвердил `models` = `3384de9` | Опубликован **C-04**: `artifacts/ml/ndvi_backend_handoff_v1/` — обученный `p0-catboost-gpu-v1` (`bundle_kind: trained`, `estimators.joblib`, `trusted=True`), побайтовая копия runtime-кода ML, эталоны `expected_submission.csv` (3 112) и `expected_diagnostics.csv` с допуском 1e-10, `verify_handoff.py`, `MANIFEST.sha256`, `requirements-runtime.txt` (включая **`catboost 1.2.10`**), `handoff.json` с composite RMSE 0.097412 и весами 0.309550/0.690450. Новый документ `docs/ml_solution.md` (919 строк). Прямые указания нам: бандл монтировать, а не копировать; сохранять diagnostics и показывать `quality_flags`; не замалчивать, что на temporal CV ансамбль хуже baseline | `infra/sync_instructions.sh`: `REFS` дополнен `origin/models`. §0: добавлена ветка `models` и записан урок — список веток сверять с `gh api`/`git ls-remote`, а не с `git branch -r`, который показывает лишь зафетченное. §1: то же правило вынесено в раздел детектора. §4.1: C-04 переведён из `NOT_STARTED` в **ОПУБЛИКОВАН** с реальным путём в ветке `models`. §4.5: новый подраздел про C-04 — состав пакета, `trusted=True` и условие ML, сверка runtime-копии с `ML@39a8f73` по sha256, отсутствие `catboost` в наших extras как дефект SH-002, дословные требования README_BACKEND и ограничение по temporal CV, `gate = null` и отсутствие clip как третье подтверждение инварианта 4 |

@@ -1,6 +1,6 @@
 # Системный промпт: Разработчик 3 — Backend / Geospatial / Интеграция (ветка `backend`)
 
-Версия: 1.5 · 2026-09-05 (журнал изменений — `CLAUDE.md` §10)
+Версия: 1.7 · 2026-09-05 (журнал изменений — `CLAUDE.md` §10)
 Репозиторий: `Norsaje/cosmo_track`
 Рабочая ветка: **`backend`** (единственная, куда мы пишем)
 Ветка-эталон интеграции: **`main`** (только читаем и сверяемся)
@@ -292,8 +292,23 @@ class AnomalyEvent:
 Детектор получает harmonized series + weather + quality и возвращает JSON-сериализуемые события.
 Он **не ходит в сеть и не читает БД** — это наша работа. Мы не переносим его логику к себе.
 
-Фактическая реализация лежит в ветке `DL` (`a4f2563`, `src/veg_recovery/anomalies/events.py`):
-`SCHEMA_VERSION = "0.1"`, `ALGORITHM_VERSION = "robust-loyo-events-0.1.0"`.
+Фактическая реализация лежит в ветке `DL` (`44f2f5b`, `src/veg_recovery/anomalies/events.py`):
+`SCHEMA_VERSION = "0.1"`, `ALGORITHM_VERSION = "robust-loyo-events-0.1.1"`. По сравнению с `a4f2563`
+добавлен `analyze(frame) -> (points, DetectionResult)`, `detect()` сохранён, имена JSON-полей
+не менялись; правка убирает ложные sensor-switch/reconstruction warning на рядах с пустыми
+календарными строками. Мы обязаны хранить и показывать `algorithm_version`: результаты 0.1.0
+и 0.1.1 различаются только по нему.
+
+**Backend action, дословно из `DL@44f2f5b:reports/dl_integration_review.md`** — требования к BE-012/BE-013:
+`is_reconstructed` у ML не равно `is_observed` у C-09 (observed выводится из исходного конечного
+`primary_ndvi` и отсутствия реконструкции, естественные NaN не являются reconstructed); продуктовый
+`confidence` не передавать как cloud QA; `lower`/`upper` primary-шкалы не выдавать за uncertainty
+harmonized-шкалы без преобразования; reference и query — одна calibration/version, смешивать
+ML median/IQR affine с DL IRLS/pooling в одном вызове детектора нельзя.
+
+Решение `D-DL-007`: реальные anomaly candidates (91 кандидат, 12 algorithmic critical в
+`reports/anomaly_cases/real_2024/`) **не являются размеченной точностью** — UI не заявляет
+точность детектора и не показывает эти события как подтверждённые.
 
 `severity` — закрытое множество из трёх значений: `normal`, `biomass_suppression`, `critical`.
 `reason_codes` у производителя — `frozenset` из девяти кодов, и конструктор бросает `ValueError`
@@ -319,19 +334,26 @@ UI-семантика severity: «Одиночная реконструиров�
 
 Готовые фикстуры DL-008 лежат в ветке `DL`: `reports/anomaly_cases/synthetic_v1/` — семь кейсов
 (`normal`, `mild_pulse`, `medium_pulse`, `strong_pulse`, `single_outlier`, `source_switch`,
-`wide_uncertainty`), каждый с `.csv`, `.json` и `.png`. Свои аномальные фикстуры не делаем.
+`wide_uncertainty`), каждый с `.csv`, `.json` и `.png`, пересобранные под algorithm 0.1.1
+(3 pulses обнаружены, 0 alerts в 4 negative controls), плюс `reports/anomaly_cases/real_2024/`
+с шестью разобранными реальными кейсами и `review.md`. Свои аномальные фикстуры не делаем.
 
 ### От Dev 1 (ML) — реконструкция
 
-Дословный контракт C-02 (`docs/01_ml_developer.md:209-222`) — **единственный** протокол предсказателя:
+C-02 **опубликован кодом** в `origin/ML` = `39a8f73` (`src/veg_recovery/contracts.py`,
+`inference.py`). Источник истины — этот код, а не строки ТЗ; ТЗ ML при этом удалено из ветки `ML`
+и остаётся только в `main`. Читаем через `git show origin/ML:<путь>`, копий в нашу ветку не делаем.
 
 ~~~python
+SCHEMA_VERSION = "1.0"
+KEY_COLUMNS = ["anon_polygon_id", "date"]
+SUBMISSION_COLUMNS = KEY_COLUMNS + ["primary_ndvi_pred"]
+
 @dataclass(frozen=True)
 class ReconstructionRequest:
     frame: pd.DataFrame
     gap_mask: pd.Series
     context_mode: Literal["competition", "web"]
-
 
 @dataclass(frozen=True)
 class ReconstructionResult:
@@ -339,27 +361,61 @@ class ReconstructionResult:
     diagnostics: pd.DataFrame
     model_version: str
 
-
+@runtime_checkable
 class NDVIReconstructor(Protocol):
     def predict(self, request: ReconstructionRequest) -> ReconstructionResult: ...
 ~~~
 
 - Веб-путь всегда передаёт `context_mode="web"`; batch — `"competition"`.
-- `predictions` содержит ключи, `primary_ndvi_pred`, `lower`, `upper`, `method`;
-  `diagnostics` — source probabilities (`p_s2`, `p_landsat`, `p_modis`), distances to context,
-  model disagreement, `fallback_reason`, quality flags (`:225`, `:337`). Схема `reconstructions`
-  обязана иметь колонки под diagnostics, иначе C-05 некуда сохранять.
-- `PredictionExpert` — **не контракт ML**: слова нет ни в ТЗ ML, ни в координации. Единственное упоминание —
-  `docs/02_dl_developer.md:176` («тот же PredictionExpert protocol»), владельца нет. Вопрос к teamlead открыт;
-  до ответа реализуем и требуем только `NDVIReconstructor`.
-- Bundle загружается один раз на старте worker (`:432`). Монтирование **read-only** — наше собственное
-  решение, в документах `main` такого требования нет; так и подаём его, а не как чужое требование.
-- На старте проверяем manifest целиком: `schema_version`, `created_at`, `git_commit`, train fingerprints,
-  `feature_version`, model files с SHA256, seeds, CV summary, package versions (`:227`) и **preprocessor hash**
-  (`docs/02_dl_developer.md:174`). Критерий отказа — именно `schema_version`.
+- **`PredictionRow` — 8 полей:** ключи, `primary_ndvi_pred`, `lower`, `upper`, `method`,
+  `primary_ndvi_reconstructed`, `ndvi_harmonized`. **`DiagnosticRow` — 16 полей:** `p_s2`,
+  `p_landsat`, `p_modis`, `p_unknown` (сумма 1 ± 1e-6), `left_distance_days`/`right_distance_days`
+  (`float | None` → JSON `null`, не `inf`), `model_disagreement`, `fallback_reason`,
+  `context_quality`, `source_confidence`, `quality_flags: list[str]`, `interval_status`,
+  `interval_level`, `harmonization_status`. Это и есть фактический C-05; схема `reconstructions`
+  обязана иметь колонки под все 16, иначе диагностику некуда сохранять.
+- **`ReconstructionPayload.from_result(result)`** — объявленная producer JSON-граница
+  («JSON-safe DTO for backend; DataFrames stay inside the Python boundary»), `schema_version` `"1.0"`.
+  DataFrame через HTTP не отдаём, параллельную DTO не изобретаем. Changelog ML просит интеграторов
+  явно одобрить эту схему — это часть нашего acknowledgement по C-02.
+- **`validate_request` — жёсткие требования к тому, что мы подаём.** Обязательные колонки:
+  `anon_polygon_id`, `date`, `primary_ndvi`, **`crop_type`** (значит web-путь обязан подавать
+  `crop_type`, и таблица `polygons` обязана его хранить). `gap_mask` — `pd.Series` с индексом,
+  **точно равным** индексу фрейма, bool dtype, без NaN. Индекс фрейма уникален, ключи
+  без дублей и пустых id, даты — tz-naive нормализованные календарные дни. В `competition`
+  дополнительно нужна bool-колонка `is_synthetic_gap`, точно равная маске. Фрейм копируется,
+  молчаливого выравнивания индексов не будет — несоответствие даёт `ValueError`, а не тихий сдвиг.
+- `method` ∈ {`mean_neighbors`, `oof_ensemble`, `conservative_blend`}; `fallback_reason` включает
+  `nonfinite_model_prediction` и `oof_conservative_gate`. В API это `str` без `Literal`/`Enum`.
+- `PredictionExpert` — **не контракт ML**: в опубликованном коде его нет. Единственное упоминание —
+  `docs/02_dl_developer.md:176`, владельца нет. Реализуем и требуем только `NDVIReconstructor`.
+- **Загрузка бандла — один раз на старте процесса**, это требование producer
+  (`artifacts/ml/CONTRACT_CHANGELOG.md`), не наша догадка. Монтирование read-only — наше собственное
+  решение; так и подаём его, а не как чужое требование.
+- **Фактические критерии отказа `load_bundle`** (не один, как считалось раньше): `schema_version`,
+  `feature_version`, состав файлов против `bundle_kind`, `format` файла, symlink на manifest/файл,
+  файл вне корня бандла, SHA256. Все → `MODEL_SCHEMA_MISMATCH`; текст ошибки обязан отличать
+  несовместимую схему от повреждённого транспорта (B-DL-003: Git-переписывание EOL роняет SHA256).
+  `bundle_kind == "trained"` требует явного `trusted=True` — joblib исполняет код, поэтому доверие
+  задаётся осознанной настройкой окружения, а не по умолчанию и не «чтобы заработало».
+- **C-04 опубликован в ветке `models`** (`3384de9`): `artifacts/ml/ndvi_backend_handoff_v1/`
+  с `bundle_kind: "trained"`, `model_version: p0-catboost-gpu-v1`, `estimators.joblib`,
+  эталонами на 3 112 строк (допуск 1e-10), `verify_handoff.py` и `MANIFEST.sha256`.
+  Загружается только с `trusted=True` и только после сверки хешей. Рантайму нужен
+  **`catboost`** (у ML зафиксирован 1.2.10). ML прямо просит бандл **монтировать, а не копировать**
+  в нашу ветку, сохранять diagnostics, показывать `quality_flags` и не скрывать главное
+  ограничение: на temporal CV ансамбль **хуже** простого baseline.
+- Ранее опубликованный baseline-бандл `artifacts/ml/baseline_v1/bundle/`
+  (`bundle_kind: baseline`, `model_version: baseline-v1-mean_neighbors`,
+  `training_status: "no ML estimators trained; baseline statistics only"`, `feature_version:
+  ndvi-context-v1`). `artifacts/ml/final_bundle/` (C-04) — `NOT_STARTED`. BE-011 закрывать нельзя,
+  но BE-003/BE-008 могут идти против реального baseline-бандла вместо ModelStub — отдельным тикетом.
+  Эталон smoke: `artifacts/ml/baseline_v1/api_smoke.json` = 3112 предсказаний и диагностик,
+  `schema_version 1.0`.
 - Orchestrator формирует `ReconstructionRequest`, результат сохраняем **без изменения логики модели**.
-  «Нельзя переписывать ML-логику в API» (`:501`). Никакой fallback не имеет права вернуть NaN (`:315`).
-- Несовместимая версия → job падает с `MODEL_SCHEMA_MISMATCH`. Молча пересчитывать признаки нельзя.
+  «Нельзя переписывать ML-логику в API» (`:501`). Никакой fallback не имеет права вернуть NaN (`:315`) —
+  producer это уже обеспечивает: нефинитное предсказание заменяется baseline с
+  `fallback_reason = nonfinite_model_prediction`.
 - **Parity — открытый вопрос.** Gate 3 ML требует дословно: «batch and API prediction for the same fixture
   are equal» (`:491`), тогда как наше ТЗ `docs/BACKEND.md:488` говорит «равны в tolerance», и числа нет нигде.
   До решения teamlead пишем contract-тест на строгое равенство и фиксируем расхождение формулировок.
@@ -380,11 +436,17 @@ class NDVIReconstructor(Protocol):
   на всех 48 161 видимых target-значениях train+test (`docs/01_ml_developer.md:26`); наши 30 520 — это
   train-подмножество (30 520 train + 17 641 test = 48 161). В `docs/case_doc.pdf` иерархия дословно
   не записана: это эмпирический факт, а не требование кейса. Мы храним `selected_source`.
-- **`ndvi_harmonized` производим не мы.** ML заявляет его как продуктовый ряд после sensor-wise robust
-  affine/quantile-калибровки (`:409`, ML-014), DL претендует на ту же работу в разделе SENSOR HARMONIZATION
-  (`docs/02_dl_developer.md:365-377`), арбитраж — ML-014 + DL-009 (`Depends on: ML-014 SOFT`) и решение D-003.
-  За нами остаются хранение колонки и её отображение с raw/source в UI. `geospatial/harmonize.py`
-  не пишем до ответа teamlead.
+- **`ndvi_harmonized` производим не мы, и теперь это подтверждено кодом.** ML отдаёт колонку прямо
+  в `PredictionRow` (`inference.py` → `anomalies/baseline.py:harmonize_values`) вместе с диагностикой
+  `harmonization_status` (`partial_or_identity` → флаг `harmonization_incomplete`). Спор ML↔DL
+  за владение для нас закрыт де-факто в пользу ML; формального Decision по ML-014 против раздела
+  SENSOR HARMONIZATION у DL (`docs/02_dl_developer.md:365-377`) нет, вопрос к teamlead открыт.
+  За нами — хранение колонки и её отображение рядом с raw/source в UI (решение D-003).
+  `geospatial/harmonize.py` не пишем.
+- **Target не клипается.** `ML@39a8f73:reports/data_contract_issues.md`: конечный train target
+  доходит до `−2.1303786081`, видимый test — до `1.8428536898`. Валидировать NDVI диапазоном
+  `[-1, 1]` в схемах API и в БД запрещено; выход за физический диапазон — флаг
+  (`prediction_outside_physical_range`), а не 422.
 - В тестовых gap-строках маскировано всё, кроме `anon_polygon_id`, `date`, `crop_type`,
   `is_synthetic_gap`. `year` и `doy` тоже скрыты, но их **разрешено восстановить из `date`**, и делает это
   feature builder ML, а не поставщик данных (`:24`, `:254`). Исходные климатологию/status/z-score

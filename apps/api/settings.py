@@ -26,6 +26,19 @@ class Settings(BaseSettings):
     #: Пока bundle нет, `/health/ready` честно отвечает not_configured.
     model_bundle_path: str = "/srv/model_bundle"
 
+    #: Контур развёртывания. Единственное значение, при котором заглушка модели
+    #: запрещена, — "production" (red-team checklist перед CP-3).
+    environment: str = "development"
+
+    #: Разрешена ли подмена отсутствующего bundle заглушкой ModelStub. Сломанный
+    #: bundle заглушкой не подменяется никогда — см. `service.build_reconstructor`.
+    allow_model_stub: bool = True
+
+    #: Осознанное доверие к trained-бандлу. `load_bundle` требует его явно, потому что
+    #: joblib исполняет код при загрузке: SHA256 ловит порчу файла, но не подлог автора.
+    #: Значение по умолчанию False — доверие включается только после проверки провенанса.
+    model_bundle_trusted: bool = False
+
     #: CORS — только allowlist, никаких "*" в проде (§8.12 ТЗ).
     cors_origins: list[str] = ["http://localhost:8080"]
 
