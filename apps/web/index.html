@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#006FEE" />
   <title>cosmo_track — мониторинг вегетационной динамики</title>
-  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <!-- MapLibre отдаётся нашим сервером, а не CDN: стенд открывают с чужой машины,
+       и у браузера доступа к unpkg.com может не быть — тогда карта не появляется при
+       полностью исправном сервере. Файлы кладёт в образ Dockerfile.web с проверкой SHA256. -->
+  <link rel="stylesheet" href="/vendor/maplibre-gl.css" />
   <style>
     /* ============================================================================
        Дизайн-система перенесена из HeroUI (бывш. NextUI) @heroui/theme 2.4.26:
@@ -395,14 +398,13 @@
         </div>
 
         <div class="alert alert-warning" id="tiles-note" hidden>
-          <div>Подложка карты не загрузилась — нет доступа к сети. Это не отказ
-          сервиса: анализ, график и таблицы работают.</div>
+          <div id="tiles-note-text"></div>
         </div>
       </aside>
     </div>
   </main>
 
-  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="/vendor/maplibre-gl.js"></script>
   <script>
   (function () {
     "use strict";
@@ -466,18 +468,45 @@
     // ---------------------------------------------------------------- карта
     const emptyCollection = () => ({ type: "FeatureCollection", features: [] });
 
+    // Одна плашка на все беды карты скрывала причину: «нет доступа к сети»
+    // показывалось и когда не загрузилась библиотека, и когда не пришёл один тайл.
+    // Причины разные, и чинятся они по-разному.
+    function noteMapProblem(text) {
+      $("tiles-note-text").textContent = text;
+      $("tiles-note").hidden = false;
+    }
+
     function initMap() {
-      if (typeof maplibregl === "undefined") { $("tiles-note").hidden = false; return; }
+      if (typeof maplibregl === "undefined") {
+        noteMapProblem("Библиотека карты не загрузилась с сервера. Список полей, " +
+          "анализ, график и таблицы работают — недоступна только карта.");
+        return;
+      }
       const map = new maplibregl.Map({
         container: "map",
         style: { version: 8, sources: { osm: { type: "raster",
-          tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], tileSize: 256,
+          tiles: [location.origin + "/tiles/{z}/{x}/{y}.png"], tileSize: 256,
           attribution: "© OpenStreetMap" } }, layers: [{ id: "osm", type: "raster", source: "osm" }] },
         center: [39.5, 45.5], zoom: 7,
       });
       state.map = map;
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-      map.on("error", () => { $("tiles-note").hidden = false; });
+
+      // Плашка показывается, только если тайлы не пришли ВООБЩЕ. MapLibre шлёт
+      // `error` и на отменённых при зуме запросах — реагировать на каждый значило бы
+      // пугать сообщением о недоступности прямо поверх работающей карты.
+      let tilesLoaded = 0, tileErrors = 0;
+      map.on("data", (event) => {
+        if (event.sourceId === "osm" && event.tile) { tilesLoaded += 1; $("tiles-note").hidden = true; }
+      });
+      map.on("error", (event) => {
+        if (event && event.sourceId && event.sourceId !== "osm") return;
+        tileErrors += 1;
+        if (tilesLoaded === 0 && tileErrors >= 3) {
+          noteMapProblem("Подложка карты не загружается: сервер не смог получить тайлы. " +
+            "Контуры полей, анализ и график работают — не видно только фон карты.");
+        }
+      });
 
       map.on("load", () => {
         map.addSource("fields", { type: "geojson", data: emptyCollection() });

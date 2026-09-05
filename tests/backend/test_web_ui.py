@@ -134,13 +134,16 @@ def test_chart_axis_is_not_clamped_to_physical_range(page: str) -> None:
 
 
 def test_map_failure_degrades_without_breaking_analysis(page: str) -> None:
-    """Отсутствие сети ломает подложку, но не сервис.
+    """Неработающая карта не выдаётся за отказ сервиса.
 
-    MapLibre грузится из CDN; если инициализация карты уронит скрипт, страница
-    будет выглядеть мёртвой при полностью живом API.
+    Если инициализация карты уронит скрипт, страница будет выглядеть мёртвой при
+    полностью живом API, поэтому отсутствие библиотеки проверяется явно. И оба
+    сообщения о проблемах с картой обязаны сказать, что остальное работает —
+    иначе пользователь решит, что сломан весь сервис, и не станет ничего делать.
     """
     assert 'typeof maplibregl === "undefined"' in page
-    assert "Это не отказ сервиса" in page
+    assert "недоступна только карта" in page
+    assert "не видно только фон карты" in page
 
 
 def test_idempotent_response_is_explained(page: str) -> None:
@@ -206,3 +209,34 @@ def test_service_indicator_is_announced_to_screen_readers(page: str) -> None:
     """
     assert 'aria-live="polite"' in page
     assert 'role="status"' in page
+
+
+def test_page_loads_nothing_from_external_cdn(visible: str) -> None:
+    """Страница не должна зависеть от доступности чужих доменов.
+
+    Реальный случай с демо: стенд открыли с другой машины, у браузера не было
+    доступа к unpkg.com и tile.openstreetmap.org — карта не появилась при
+    полностью исправном сервере, и в логах не было ни одной ошибки, потому что
+    браузер ходил за этими файлами мимо нас.
+
+    Теперь и библиотека карты, и тайлы отдаются нашим сервером. Проверяются
+    только реальные ссылки (src/href), комментарии из проверки исключены.
+    """
+    external = re.findall(r'(?:src|href)="(https?://[^"]+)"', visible)
+    assert external == [], f"страница тянет внешние ресурсы: {external}"
+    assert '"/vendor/maplibre-gl.js"' in visible
+    assert "/tiles/{z}/{x}/{y}.png" in visible
+
+
+def test_map_problems_are_distinguished(page: str) -> None:
+    """Причины неработающей карты различаются.
+
+    Одна плашка на все беды скрывала причину: «нет доступа к сети» показывалось
+    и когда не загрузилась библиотека, и когда не пришёл один тайл. Чинятся эти
+    случаи по-разному, значит и называться должны по-разному.
+    """
+    assert "Библиотека карты не загрузилась" in page
+    assert "Подложка карты не загружается" in page
+    # Ошибка одного тайла не должна поднимать плашку: MapLibre шлёт error и на
+    # отменённых при зуме запросах, а пугать сообщением поверх работающей карты нельзя.
+    assert "tilesLoaded === 0 && tileErrors >= 3" in page
