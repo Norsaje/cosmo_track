@@ -272,3 +272,80 @@ def test_hidden_elements_use_classes_that_would_override_it(page: str) -> None:
 def test_status_indicator_starts_neutral(page: str) -> None:
     """До первой проверки состояние неизвестно, и красный цвет сообщал бы неправду."""
     assert re.search(r'id="health-chip" class="chip chip-default"', page)
+
+
+def test_map_takes_the_whole_screen(page: str) -> None:
+    """Карта — главный объект работы, а не полоска сверху.
+
+    `position:absolute; inset:0` вместо строки грида: панель лежит поверх карты,
+    а не отнимает у неё высоту.
+    """
+    assert re.search(r"#map\s*\{[^}]*position:\s*absolute[^}]*inset:\s*0", page)
+
+
+def test_sheet_can_be_dragged(page: str) -> None:
+    """Меню открывается свайпом.
+
+    Pointer-события, а не touch: та же логика работает мышью на десктопе и
+    стилусом, и не требует отдельной ветки кода.
+    """
+    for handler in ("pointerdown", "pointermove", "pointerup", "pointercancel"):
+        assert handler in page, handler
+    assert "setPointerCapture" in page
+    # Три положения: приоткрытое, среднее, полное.
+    assert '["peek", "half", "full"]' in page
+
+
+def test_sheet_shows_it_can_be_dragged(page: str) -> None:
+    """Пользователь должен видеть, что панель тянется, не пробуя жест наугад.
+
+    Три подсказки сразу: ручка-полоска, текст с направлением и стрелка,
+    переворачивающаяся при открытии. Жест, о котором нельзя догадаться,
+    для большинства не существует.
+    """
+    assert ".sheet-grip::before" in page
+    assert "потяните вверх, чтобы открыть меню" in page
+    assert "потяните вниз, чтобы свернуть" in page
+    assert "sheet-nudge" in page
+
+
+def test_sheet_is_operable_without_gestures(page: str) -> None:
+    """Жест не должен быть единственным способом.
+
+    Тап по ручке и клавиатура обязаны делать то же самое: свайп недоступен
+    и при работе со скринридером, и мышью на десктопе.
+    """
+    assert 'grip.addEventListener("click"' in page
+    assert 'grip.addEventListener("keydown"' in page
+    assert "ArrowUp" in page and "ArrowDown" in page
+    assert 'aria-expanded' in page
+
+
+def test_scrolled_content_does_not_close_the_sheet(page: str) -> None:
+    """Тяга вниз по прокрученному тексту скроллит его, а не закрывает панель.
+
+    Иначе длинную таблицу аномалий невозможно дочитать: любое движение пальца
+    вниз схлопывало бы лист.
+    """
+    assert "body.scrollTop > 0" in page
+
+
+def test_analysis_menu_appears_only_with_a_selected_field(page: str) -> None:
+    """Меню анализа открывается только при выбранном поле.
+
+    Без поля выбирать период и жать «Запустить» не по чему, а пустая форма с
+    неактивной кнопкой занимает экран и выглядит как поломка.
+    """
+    assert re.search(r'id="analysis-card"[^>]*hidden', page)
+    assert '$("analysis-card").hidden = false' in page
+    assert '$("analysis-card").hidden = true' in page
+
+
+def test_drawing_controls_live_over_the_map(page: str) -> None:
+    """Кнопки рисования — поверх карты, а не в панели.
+
+    Рисуют по карте; уходить за кнопкой в панель значило бы закрывать то,
+    по чему собираешься кликать.
+    """
+    assert 'class="map-actions"' in page
+    assert re.search(r'\.map-actions\s*\{[^}]*position:\s*absolute', page)
