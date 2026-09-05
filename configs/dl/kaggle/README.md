@@ -53,12 +53,12 @@ python configs/dl/kaggle/package_dataset.py --ml-root tmp/dl-review-ml
 Ячейка полной CV выполняет:
 
 ```bash
-PYTHONPATH=src_dl:src_ml CUBLAS_WORKSPACE_CONFIG=:4096:8 \
-python -m veg_recovery.dl.train \
-  --fold-manifest inputs/dl_c03.json --device cuda \
-  --seeds 17 42 73 --window 61 --epochs 24 --epoch-policy fixed \
-  --base-mode anchored --batch-size 64 --output /kaggle/working/dl_tcn_run
+PYTHONPATH=src CUBLAS_WORKSPACE_CONFIG=:4096:8 python -m veg_recovery.dl.train   --fold-manifest inputs/dl_c03.json --device cuda   --seeds 17 42 73 --window 61 --epochs 16 --epoch-policy fixed   --base-mode anchored --batch-size 64 --output /kaggle/working/dl_tcn_run
 ```
+
+Бюджет 16 эпох закреплён заранее по inner-кривой пилотного фолда: плато на
+12–17 эпохе в matched, unseen и temporal. По outer OOF epoch не выбирается.
+До слияния веток PYTHONPATH будет `src_dl:src_ml`; notebook подставляет его сам.
 
 ## Шаг 4. Забрать результаты
 
