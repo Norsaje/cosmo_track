@@ -49,9 +49,12 @@ def visible() -> str:
 
 def test_required_controls_exist(page: str) -> None:
     """CP-4: «Полигон можно найти или нарисовать» — значит в UI есть чем рисовать."""
-    markers = ('id="map"', 'id="btn-draw"', 'id="btn-finish"', 'id="btn-analyse"', 'id="chart"')
+    markers = ('id="map"', 'id="btn-draw"', 'id="btn-finish"', 'id="chart"')
     for marker in markers:
         assert marker in page, marker
+    # Кнопка запуска создаётся вместе с развёрнутой плиткой, а не лежит в
+    # статической разметке, поэтому проверяется её создание.
+    assert 'run.id = "btn-analyse"' in page
 
 
 def test_series_distinguishes_observed_from_reconstructed(page: str) -> None:
@@ -336,15 +339,63 @@ def test_vertical_movement_belongs_to_the_content(page: str) -> None:
     assert "Math.abs(dy) > Math.abs(dx)" in page
 
 
-def test_analysis_menu_appears_only_with_a_selected_field(page: str) -> None:
-    """Меню анализа открывается только при выбранном поле.
+def test_analysis_lives_inside_the_field_tile(page: str) -> None:
+    """Анализ открывается внутри плитки поля, а не отдельной карточкой ниже.
 
-    Без поля выбирать период и жать «Запустить» не по чему, а пустая форма с
-    неактивной кнопкой занимает экран и выглядит как поломка.
+    Отдельная карточка заставляла соотносить её с выбранной плиткой глазами и
+    прокруткой: на телефоне список и форма не помещались на экран одновременно.
+    Теперь плитка разворачивается на месте и содержит всё, что относится к полю.
     """
-    assert re.search(r'id="analysis-card"[^>]*hidden', page)
-    assert '$("analysis-card").hidden = false' in page
-    assert '$("analysis-card").hidden = true' in page
+    assert "function buildDetails(polygon)" in page
+    assert 'box.className = "tile-details"' in page
+    # Порядок частей: удаление, координаты, период, запуск, ход выполнения.
+    assert "box.append(remove, coordsTitle, coords, periodLabel, dates, run, job)" in page
+    # Повторный клик по плитке сворачивает её.
+    assert "select(polygon.id === state.selected ? null : polygon.id)" in page
+
+
+def test_tile_shows_delete_and_vertex_coordinates(page: str) -> None:
+    """В развёрнутой плитке — удаление в правом верхнем углу и координаты вершин.
+
+    Удаление относится к полю целиком, поэтому стоит отдельно от кнопки запуска:
+    рядом с ней легко промахнуться после долгой настройки периода.
+    """
+    assert 'remove.className = "tile-delete btn-danger"' in page
+    assert re.search(r"\.tile-delete\s*\{[^}]*position:\s*absolute[^}]*right:", page)
+    assert "Вершины контура (широта, долгота)" in page
+    # Замыкающая точка кольца GeoJSON дублирует первую — человеку её не показываем.
+    assert "ring.slice(0, -1)" in page
+
+
+def test_tile_survives_being_rerendered(page: str) -> None:
+    """Введённый период не теряется при перерисовке списка.
+
+    Плитка пересоздаётся на каждый выбор, вместе с ней и поля ввода. Без хранения
+    периода в состоянии выбранные даты молча возвращались бы к значениям
+    по умолчанию — а человек уже нажал бы «Запустить».
+    """
+    assert "dateFrom:" in page and "dateTo:" in page
+    assert "date_from: state.dateFrom, date_to: state.dateTo" in page
+
+
+def test_dock_hides_when_the_panel_is_open(page: str) -> None:
+    """Мини-меню уступает место открытой панели.
+
+    Оно плавает поверх и закрывало кнопку «Запустить анализ» ровно тогда, когда
+    до неё добирались. Вернуться к карте можно крестиком в шапке.
+    """
+    assert '$("dock").hidden = name === "open"' in page
+
+
+def test_panel_and_field_are_linkable(page: str) -> None:
+    """Ссылка открывает панель и разворачивает нужное поле.
+
+    Коллеге отправляют ссылку на конкретный участок, а не на пустую карту
+    с просьбой найти его самому.
+    """
+    assert 'hash.indexOf("#field=") === 0' in page
+    assert 'hash === "#menu"' in page
+    assert 'window.addEventListener("hashchange", applyHash)' in page
 
 
 def test_drawing_controls_live_over_the_map(page: str) -> None:

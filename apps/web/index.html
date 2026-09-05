@@ -332,14 +332,62 @@
     /* ---------------------------------------------------------------- список полей */
     .list { list-style: none; margin: 0; padding: 0; }
     .list li {
+      position: relative;
       padding: 10px 12px; margin-bottom: 8px; cursor: pointer;
       border-radius: var(--radius-md); background: var(--content2);
       border: var(--border-md) solid transparent;
       display: flex; flex-direction: column; gap: 4px;
+      /* min-width:0 обязателен во flex-колонке: без него длинное название не
+         сжимается, а растягивает плитку и выносит её за пределы панели —
+         на узком экране это и выглядело как «поехавшая» вёрстка. */
+      min-width: 0;
     }
     .list li[aria-selected="true"] { border-color: var(--primary); background: var(--primary-soft); }
-    .list li .title { font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-    .list li .meta { color: var(--muted); font-size: var(--font-tiny); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .list li .title {
+      font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      min-width: 0;
+      /* Название поля вводит человек, и «Поле-которое-я-обвёл-вчера-за-рекой»
+         без переноса ломает всю панель. Рвём по любому месту, а не только
+         по пробелам. */
+      overflow-wrap: anywhere;
+      /* Место под кнопку удаления, которая лежит в правом верхнем углу. */
+      padding-right: 34px;
+    }
+    .list li .meta {
+      color: var(--muted); font-size: var(--font-tiny);
+      display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+      min-width: 0; overflow-wrap: anywhere;
+    }
+    .list li .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Развёрнутая часть плитки: удаление, координаты, период и запуск. Раньше
+       это была отдельная карточка ниже списка — приходилось соотносить её с
+       выбранной плиткой глазами и прокруткой. */
+    .tile-details {
+      margin-top: 8px; padding-top: 10px;
+      border-top: var(--divider-weight) solid var(--divider);
+      display: flex; flex-direction: column; gap: 8px;
+      cursor: default;
+    }
+    .tile-delete {
+      position: absolute; top: 8px; right: 8px;
+      min-height: 32px; min-width: 32px; padding: 0 8px;
+      font-size: var(--font-tiny); line-height: 1;
+    }
+    .tile-coords {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px; line-height: 1.45; color: var(--muted);
+      background: var(--content1); border-radius: var(--radius-sm);
+      padding: 8px 10px; max-height: 132px; overflow: auto;
+      /* Координаты не переносим по середине числа: пара «широта, долгота»
+         должна читаться целиком. */
+      white-space: pre; overscroll-behavior: contain;
+    }
+    .tile-dates { display: flex; gap: 8px; flex-wrap: wrap; }
+    /* На узкой панели два поля даты в строку сжимаются до нечитаемого: у нативного
+       датапикера есть минимальная ширина, и он вылезает за край. Ниже 240px
+       внутренней ширины они встают друг под друга. */
+    .tile-dates input { flex: 1 1 130px; min-width: 0; }
 
     /* ---------------------------------------------------------------- прогресс */
     .progress { height: 6px; border-radius: 999px; background: var(--content3); overflow: hidden; margin: 8px 0; }
@@ -468,30 +516,6 @@
           </ul>
         </div>
 
-        <!-- Меню анализа появляется только когда поле выбрано: без поля выбирать
-             период и жать «Запустить» не по чему, а пустая форма с неактивной
-             кнопкой занимает экран и создаёт ощущение, что что-то сломано. -->
-        <div class="card" id="analysis-card" hidden>
-          <h2>Анализ</h2>
-          <div id="analysis-field" style="color:var(--muted); font-size:var(--font-tiny)"></div>
-          <label for="date-from">Период</label>
-          <div style="display:flex; gap:8px">
-            <input type="date" id="date-from" value="2024-04-01" aria-label="Начало периода" />
-            <input type="date" id="date-to" value="2024-09-30" aria-label="Конец периода" />
-          </div>
-          <div style="margin-top:12px; display:flex; gap:8px">
-            <button id="btn-analyse" class="btn-primary" style="flex:1" disabled>Запустить анализ</button>
-            <button id="btn-delete" class="btn-danger">Удалить</button>
-          </div>
-          <div id="job-box" hidden>
-            <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-              <i id="job-bar" style="width:0%"></i>
-            </div>
-            <div class="stages" id="job-stages"></div>
-            <div id="job-alert"></div>
-          </div>
-        </div>
-
         <div class="card" id="chart-card" hidden>
           <h2>Ряд NDVI</h2>
           <div class="legend" aria-hidden="true">
@@ -533,6 +557,10 @@
       draft: [], drawing: false, pending: null,
       map: null, poll: null, series: null, anomalies: null,
       sheet: "peek",
+      // Период хранится в состоянии, а не только в полях ввода: плитка
+      // перерисовывается при каждом выборе, и вместе с ней пересоздаются input —
+      // без этого выбранные даты сбрасывались бы к значениям по умолчанию.
+      dateFrom: "2024-04-01", dateTo: "2024-09-30",
     };
 
     const $ = (id) => document.getElementById(id);
@@ -594,6 +622,12 @@
       sheet.style.transform = "";
       $("backdrop").dataset.visible = String(name === "open");
       $("edge-hint").hidden = name === "open";
+      // Мини-меню прячется вместе с открытием панели. Оно плавает поверх и
+      // закрывало кнопку «Запустить анализ» ровно в тот момент, когда до неё
+      // добирались. Своё дело оно уже сделало: панель открыта, «Поля» и так
+      // активны, а вернуться к карте можно крестиком в шапке — он стоит там,
+      // где его ищут, и не перекрывает содержимое.
+      $("dock").hidden = name === "open";
       $("dock-fields").setAttribute("aria-selected", String(name === "open"));
       $("dock-map").setAttribute("aria-selected", String(name !== "open"));
       // Открытая панель забирает фокус-поток на себя: по Tab человек не должен
@@ -673,8 +707,11 @@
 
     function updateSheetHeader() {
       const selected = state.polygons.find((item) => item.id === state.selected);
-      $("sheet-counter").textContent = String(state.polygons.length);
       $("sheet-title-text").textContent = selected ? selected.name : "Поля";
+      // Счётчик — про список, а не про поле. Рядом с названием участка «7»
+      // читается как «семь чего-то у этого поля», поэтому при выборе он уходит.
+      $("sheet-counter").hidden = Boolean(selected);
+      $("sheet-counter").textContent = String(state.polygons.length);
     }
 
     // ---------------------------------------------------------------- карта
@@ -829,13 +866,95 @@
           '<div class="title">' + esc(polygon.name) + repaired + "</div>" +
           '<div class="meta">' + polygon.area_ha.toFixed(1) + " га · " +
           esc(polygon.crop_type || "культура не указана") + source + "</div>";
-        const choose = () => select(polygon.id);
+        if (polygon.id === state.selected) item.appendChild(buildDetails(polygon));
+
+        const choose = (event) => {
+          // Клик внутри развёрнутой части не должен схлопывать плитку: там живут
+          // поля ввода и кнопки, и повторный выбор сбрасывал бы введённое.
+          if (event && event.target.closest(".tile-details")) return;
+          select(polygon.id === state.selected ? null : polygon.id);
+        };
         item.onclick = choose;
         item.onkeydown = (event) => {
           if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(); }
         };
         list.appendChild(item);
       }
+    }
+
+    function polygonRing(polygon) {
+      const geometry = polygon.geometry || {};
+      if (geometry.type === "Polygon") return (geometry.coordinates || [])[0] || [];
+      if (geometry.type === "MultiPolygon") return ((geometry.coordinates || [])[0] || [])[0] || [];
+      return [];
+    }
+
+    function buildDetails(polygon) {
+      const box = document.createElement("div");
+      box.className = "tile-details";
+
+      // Удаление — в правом верхнем углу плитки: оно относится к полю целиком,
+      // а не к анализу, и не должно стоять рядом с кнопкой запуска, где легко
+      // промахнуться после долгой настройки периода.
+      const remove = document.createElement("button");
+      remove.className = "tile-delete btn-danger";
+      remove.type = "button";
+      remove.title = "Удалить поле";
+      remove.setAttribute("aria-label", "Удалить поле " + polygon.name);
+      remove.innerHTML = "&#10005;";
+      remove.onclick = (event) => { event.stopPropagation(); deleteSelected(); };
+      polygon.__deleteButton = remove;
+
+      const ring = polygonRing(polygon);
+      // Последняя точка кольца дублирует первую по правилам GeoJSON — показывать
+      // её человеку незачем, это деталь формата, а не вершина контура.
+      const vertices = ring.length > 1 &&
+        ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
+        ? ring.slice(0, -1) : ring;
+
+      const coords = document.createElement("div");
+      coords.className = "tile-coords";
+      coords.setAttribute("aria-label", "Координаты вершин контура");
+      coords.textContent = vertices.length
+        ? vertices.map((point, index) =>
+            String(index + 1).padStart(2, " ") + "  " +
+            point[1].toFixed(5) + ", " + point[0].toFixed(5)).join("\n")
+        : "координаты недоступны";
+
+      const coordsTitle = document.createElement("div");
+      coordsTitle.style.cssText = "font-size:var(--font-tiny);color:var(--muted)";
+      coordsTitle.textContent = "Вершины контура (широта, долгота): " + vertices.length;
+
+      const periodLabel = document.createElement("label");
+      periodLabel.textContent = "Период анализа";
+      periodLabel.setAttribute("for", "date-from");
+
+      const dates = document.createElement("div");
+      dates.className = "tile-dates";
+      const from = document.createElement("input");
+      from.type = "date"; from.id = "date-from"; from.value = state.dateFrom;
+      from.setAttribute("aria-label", "Начало периода");
+      const to = document.createElement("input");
+      to.type = "date"; to.id = "date-to"; to.value = state.dateTo;
+      to.setAttribute("aria-label", "Конец периода");
+      from.onchange = () => { state.dateFrom = from.value; };
+      to.onchange = () => { state.dateTo = to.value; };
+      dates.append(from, to);
+
+      const run = document.createElement("button");
+      run.className = "btn-primary"; run.id = "btn-analyse"; run.type = "button";
+      run.textContent = "Запустить анализ";
+      run.onclick = (event) => { event.stopPropagation(); startAnalysis(); };
+
+      const job = document.createElement("div");
+      job.id = "job-box"; job.hidden = true;
+      job.innerHTML =
+        '<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" ' +
+        'aria-valuenow="0"><i id="job-bar" style="width:0%"></i></div>' +
+        '<div class="stages" id="job-stages"></div><div id="job-alert"></div>';
+
+      box.append(remove, coordsTitle, coords, periodLabel, dates, run, job);
+      return box;
     }
 
     function select(id) {
@@ -845,11 +964,10 @@
       updateSheetHeader();
 
       const polygon = state.polygons.find((item) => item.id === id);
-      if (!polygon) { $("analysis-card").hidden = true; return; }
+      // Анализ живёт внутри развёрнутой плитки: нет выбранного поля — нет и
+      // формы, и её незачем прятать отдельно.
+      if (!polygon) return;
 
-      // Меню анализа появляется вместе с выбором поля и вместе с ним исчезает.
-      $("analysis-card").hidden = false;
-      $("analysis-field").textContent = polygon.name + " · " + polygon.area_ha.toFixed(1) + " га";
       const series = seriesOf(polygon);
       // Кнопка блокируется заранее: активная кнопка, ведущая к гарантированной
       // ошибке через несколько секунд, — обещание, которое интерфейс не выполнит.
@@ -893,7 +1011,6 @@
       if (!confirm("Удалить поле вместе с его анализами?")) return;
       await api("/polygons/" + state.selected, { method: "DELETE" });
       state.selected = null;
-      $("analysis-card").hidden = true;
       clearResults();
       await loadPolygons();
     }
@@ -923,8 +1040,10 @@
       showJob("", 0, "QUEUED");
       const response = await api("/analyses", {
         method: "POST", headers: { "content-type": "application/json" },
+        // Период берётся из состояния, а не из полей: плитка могла быть
+        // перерисована между вводом и нажатием, и её input — уже другой узел.
         body: JSON.stringify({ polygon_id: state.selected,
-          date_from: $("date-from").value, date_to: $("date-to").value }),
+          date_from: state.dateFrom, date_to: state.dateTo }),
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -1267,8 +1386,9 @@
       if (ring) await createPolygon(ring, name, seriesId);
     };
     $("btn-save-cancel").onclick = () => { $("save-form").hidden = true; state.pending = null; };
-    $("btn-delete").onclick = deleteSelected;
-    $("btn-analyse").onclick = startAnalysis;
+    // btn-analyse и кнопка удаления живут внутри развёрнутой плитки и создаются
+    // вместе с ней — обработчики вешает buildDetails. Назначать их здесь нельзя:
+    // на старте этих узлов ещё нет, и обращение к null обрывало весь скрипт.
 
     // Esc — привычный выход: сначала закрывает форму, потом отменяет рисование,
     // потом сворачивает панель.
@@ -1294,8 +1414,24 @@
     renderHealth();
     setInterval(renderHealth, 15000);
     initSheet();
+    // Ссылки вида .../#menu и .../#field=<id> открывают панель и разворачивают
+    // нужное поле: коллеге отправляют ссылку на конкретный участок, а не на
+    // пустую карту с просьбой «найди сам».
+    function applyHash() {
+      const hash = location.hash;
+      if (hash.indexOf("#field=") === 0) {
+        openSheet();
+        const id = decodeURIComponent(hash.slice(7));
+        if (state.polygons.some((item) => item.id === id)) select(id);
+      } else if (hash === "#menu") {
+        openSheet();
+      } else {
+        closeSheet();
+      }
+    }
+    window.addEventListener("hashchange", applyHash);
     initMap();
-    loadReference().then(loadPolygons);
+    loadReference().then(loadPolygons).then(applyHash);
   })();
   </script>
 </body>
