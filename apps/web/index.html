@@ -191,6 +191,21 @@
     .chip-danger  { background: var(--danger-soft);  color: var(--danger);  border-color: var(--danger); }
     /* Точка-индикатор дублирует цвет формой: цвет не единственный сигнал (§8.9). */
     .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+    /* В таблице колонка тяжести узкая, а «подавление биомассы» одной строкой
+       шире неё: nowrap выносил чип под соседнюю колонку признаков. В ячейке
+       чип переносится по словам и держится в своей ширине; точка прижата к
+       первой строке, иначе на двух строках она уезжает в середину. */
+    /* inline-flex сжимался по самому длинному слову, и «подавление биомассы»
+       вставало в три строки внутри узкой таблетки. В ячейке чип занимает
+       всю ширину колонки и переносится по словам. */
+    /* Ячейка рвёт длинные коды признаков в любом месте (overflow-wrap: anywhere),
+       и чип наследовал это: «подавление» разрывалось посреди слова в четыре
+       строки. Внутри чипа перенос только по словам, и лишний горизонтальный
+       отступ снят — в колонке 96px он стоил целой строки. */
+    td .chip { display: flex; white-space: normal; align-items: flex-start;
+               border-radius: var(--radius-md); padding: 3px 6px;
+               overflow-wrap: break-word; word-break: normal; hyphens: none; }
+    td .chip .dot { margin-top: 5px; }
 
     /* ---------------------------------------------------------------- кнопки */
     button {
@@ -578,7 +593,7 @@
     table { width: 100%; border-collapse: collapse; font-size: var(--font-tiny); table-layout: fixed; }
     th, td { text-align: left; padding: 6px 8px; border-bottom: var(--divider-weight) solid var(--divider);
              vertical-align: top; overflow-wrap: anywhere; word-break: break-word; hyphens: auto; }
-    .col-period { width: 30%; } .col-grade { width: 30%; } .col-signs { width: 40%; }
+    .col-period { width: 24%; } .col-grade { width: 34%; } .col-signs { width: 42%; }
     th { color: var(--muted); font-weight: 500; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--font-tiny); }
 
