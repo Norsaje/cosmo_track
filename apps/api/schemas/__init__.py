@@ -17,6 +17,7 @@ from .analyses import (
     SeriesPoint,
     SeriesResponse,
 )
+from .auth import CurrentUser, EmailCodeRequest, EmailCodeSent, SessionCreate
 from .errors import ErrorResponse
 from .health import (
     ComponentStatus,
@@ -47,6 +48,10 @@ from .polygons import (
 )
 
 __all__ = [
+    "CurrentUser",
+    "EmailCodeRequest",
+    "EmailCodeSent",
+    "SessionCreate",
     "ALLOWED_TRANSITIONS",
     "CONTRACT_ID",
     "CONTRACT_VERSION",

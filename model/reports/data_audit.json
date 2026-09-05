@@ -1,0 +1,103 @@
+{
+  "train": {
+    "shape": [
+      99955,
+      21
+    ],
+    "polygons": 39,
+    "date_min": "2010-04-01",
+    "date_max": "2024-10-30",
+    "visible_target": 30520,
+    "out_of_physical_range": 1,
+    "target_min": -2.1303786081123266,
+    "target_max": 0.9621426466953232,
+    "crops": {
+      "зерновые": 10,
+      "озимая пшеница": 22,
+      "пастбища/зерновые": 2,
+      "подсолнечник": 5
+    },
+    "missing": {
+      "anon_polygon_id": 0,
+      "date": 0,
+      "s2_ndvi": 88720,
+      "s2_evi": 88720,
+      "s2_ndwi": 88720,
+      "landsat_ndvi": 84363,
+      "landsat_evi": 84363,
+      "landsat_ndwi": 84363,
+      "modis_ndvi": 92428,
+      "modis_evi": 92428,
+      "era5_temp_c": 7300,
+      "era5_precip_mm": 7300,
+      "year": 0,
+      "primary_ndvi": 69435,
+      "doy": 0,
+      "ndvi_climatology_mean": 69435,
+      "ndvi_climatology_std": 69435,
+      "ndvi_zscore": 69435,
+      "n_reference_years": 0,
+      "status": 69435,
+      "crop_type": 0
+    }
+  },
+  "new_test": {
+    "shape": [
+      49190,
+      18
+    ],
+    "polygons": 20,
+    "date_min": "2010-04-01",
+    "date_max": "2024-10-30",
+    "visible_target": 13164,
+    "out_of_physical_range": 4,
+    "target_min": -0.9712364529351498,
+    "target_max": 1.6830313325873003,
+    "crops": {
+      "зерновые": 4,
+      "озимая пшеница": 13,
+      "пастбища/зерновые": 2,
+      "подсолнечник": 1
+    },
+    "missing": {
+      "anon_polygon_id": 0,
+      "date": 0,
+      "s2_ndvi": 44242,
+      "s2_evi": 44242,
+      "s2_ndwi": 44242,
+      "landsat_ndvi": 42613,
+      "landsat_evi": 42613,
+      "landsat_ndwi": 42613,
+      "modis_ndvi": 45899,
+      "modis_evi": 45899,
+      "era5_temp_c": 6151,
+      "era5_precip_mm": 6151,
+      "year": 2323,
+      "primary_ndvi": 36026,
+      "doy": 2323,
+      "n_reference_years": 2323,
+      "is_synthetic_gap": 0,
+      "crop_type": 0
+    },
+    "gaps": 2323,
+    "gaps_by_year": {
+      "2010": 86,
+      "2011": 104,
+      "2012": 92,
+      "2013": 89,
+      "2014": 111,
+      "2015": 94,
+      "2016": 105,
+      "2017": 178,
+      "2018": 131,
+      "2019": 242,
+      "2020": 228,
+      "2021": 191,
+      "2022": 207,
+      "2023": 229,
+      "2024": 236
+    },
+    "mask_rate": 0.14999677148576226
+  },
+  "overlap_polygons": []
+}

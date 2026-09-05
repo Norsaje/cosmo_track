@@ -1,9 +1,11 @@
 """Contract-тест C-04: обученный bundle `p0-catboost-gpu-v1` из ветки `models`.
 
-Пакет `artifacts/ml/ndvi_backend_handoff_v1/` пришёл мержем ветки `models` и содержит
-собственный `verify_handoff.py`. Здесь мы проверяем не его, а **наш** путь загрузки:
-`veg_recovery.service.build_reconstructor` обязан открыть тот же bundle, отказать без
-явного доверия и вернуть полную схему C-02.
+**Это исторический тест.** С BE-011R веб-путь обслуживает модель из каталога `model/`,
+и `build_reconstructor` этот bundle больше не открывает. Тест остаётся доказательством
+того, что принятый handoff H-003 по-прежнему загружается нашим кодом: `load_ml_bundle`
+обязан открыть bundle, отказать без явного доверия и вернуть полную схему C-02.
+Ни одно утверждение отсюда не описывает работающую модель сервиса — её ограничения
+проверяет `test_contract_model_run.py`.
 
 Полное сравнение с эталоном на 3 112 гэпов помечено маркером `slow` — оно занимает
 около 33 секунд и не место ему в каждом прогоне. Запуск:
@@ -20,7 +22,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from veg_recovery.service import ModelUnavailable, build_reconstructor
+from veg_recovery.service import ModelUnavailable, load_ml_bundle
 
 HANDOFF = Path(__file__).resolve().parents[2] / "artifacts/ml/ndvi_backend_handoff_v1"
 BUNDLE = HANDOFF / "bundle"
@@ -44,14 +46,14 @@ def handoff() -> dict:
 @pytest.fixture(scope="module")
 def model():
     """Trained-бандл грузится один раз на модуль — ровно как в воркере."""
-    return build_reconstructor(BUNDLE, trusted=True)
+    return load_ml_bundle(BUNDLE, trusted=True)
 
 
 def test_trained_bundle_requires_explicit_trust() -> None:
     """`estimators.joblib` исполняет код при десериализации, поэтому доверие обязано
     быть осознанным. Проверяем, что путь по умолчанию — отказ, а не тихая загрузка."""
     with pytest.raises(ModelUnavailable) as excinfo:
-        build_reconstructor(BUNDLE, trusted=False)
+        load_ml_bundle(BUNDLE, trusted=False)
     assert excinfo.value.kind == "untrusted"
 
 

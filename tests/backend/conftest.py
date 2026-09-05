@@ -49,3 +49,44 @@ def client():
     # ответа, и обработчик 500 — единственное место, где формируется безопасное
     # сообщение, — остаётся непроверяемым.
     return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture
+def authed_client(client):
+    """Клиент с действующей сессией.
+
+    Сессия создаётся прямо в базе, минуя Braining ID: тесты не должны зависеть
+    от внешнего сервиса и от доставки писем. Проверяется здесь наша половина —
+    что вход открывает доступ и что данные разделены по владельцам.
+    """
+    pytest.importorskip("sqlalchemy", reason="нужен extra `web`")
+    from datetime import UTC, datetime, timedelta
+
+    from apps.auth.sessions import SESSION_COOKIE, _hash
+    from apps.db.base import session_scope
+    from apps.db.models import Session, User
+
+    token = "test-session-token"
+    try:
+        with session_scope() as db:
+            user = User(braining_user_id="test-user", email="test@example.com")
+            db.add(user)
+            db.flush()
+            db.add(Session(
+                token_hash=_hash(token), user_id=user.id,
+                expires_at=datetime.now(UTC) + timedelta(days=1),
+            ))
+            user_id = user.id
+    except Exception:
+        pytest.skip("БД недоступна: тест требует поднятого PostgreSQL")
+
+    client.cookies.set(SESSION_COOKIE, token)
+    client.test_user_id = user_id
+    yield client
+
+    # За собой убираем: тестовый пользователь и его поля не должны копиться
+    # в базе стенда, на которой потом показывают демо.
+    with session_scope() as db:
+        stale = db.get(User, user_id)
+        if stale is not None:
+            db.delete(stale)

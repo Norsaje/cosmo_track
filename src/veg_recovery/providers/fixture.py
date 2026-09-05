@@ -70,9 +70,31 @@ def _load(path: str) -> pd.DataFrame:
     return frame
 
 
+#: Имена файлов набора. Первым идёт набор поставки модели (`model/data`), вторым —
+#: исторические имена организаторов. Порядок важен: сервис обязан отдавать ровно те
+#: ряды, на которых обучалась работающая модель. Старый `test_data.csv` (78 полигонов)
+#: сюда больше не входит — README поставки говорит прямо: «Старый test не используется»,
+#: а его полигонов нет в контексте модели, и восстановить их она не сможет.
+DATASET_NAMES: tuple[tuple[str, str], ...] = (
+    ("train.csv", "test_features.csv"),
+    ("train_dataset.csv", "test_data.csv"),
+)
+
+
 def available_datasets(data_dir: str | Path = "data") -> list[Path]:
+    """Файлы набора в каталоге. Пара выбирается целиком, а не по файлу.
+
+    Смешивать train одной поставки с test другой нельзя: у наборов разные
+    полигоны и разные контрольные пропуски, и такая смесь тихо дала бы ряды,
+    которых модель не видела.
+    """
     root = Path(data_dir)
-    return [path for path in (root / "train_dataset.csv", root / "test_data.csv") if path.is_file()]
+    for train_name, test_name in DATASET_NAMES:
+        paths = [root / train_name, root / test_name]
+        present = [path for path in paths if path.is_file()]
+        if present:
+            return present
+    return []
 
 
 @dataclass(frozen=True)

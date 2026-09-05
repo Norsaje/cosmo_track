@@ -54,13 +54,14 @@ MIN_REFERENCE_YEARS = 3
 def get_reconstructor() -> LoadedReconstructor:
     """Модель загружается один раз на процесс воркера.
 
-    Это требование владельца контракта («Load a bundle once at process startup»),
-    а не оптимизация: SHA256 всего бандла считается при каждой загрузке, и делать
-    это на каждой задаче значит тратить секунды впустую.
+    Не оптимизация, а необходимость: при загрузке считаются SHA256 обоих CSV
+    поставки, разбираются 149 145 строк набора и поднимается pickle смеси на
+    17 МБ. Делать это на каждой задаче значит тратить секунды впустую.
     """
     settings = get_settings()
     return build_reconstructor(
-        settings.model_bundle_path,
+        settings.model_package_path,
+        run_name=settings.model_run_name,
         allow_stub=settings.allow_model_stub,
         trusted=settings.model_bundle_trusted,
         environment=settings.environment,
@@ -206,6 +207,7 @@ def _detect_anomalies(session, analysis: Analysis, series, outcome: AnalysisOutc
         analysis.polygon.anon_polygon_id,
         date(1900, 1, 1),
         date(analysis.date_from.year - 1, 12, 31),
+        data_dir=get_settings().model_data_dir,
     )
     reference_frame = reference.frame.copy()
     reference_frame["date"] = pd.to_datetime(reference_frame["date"]).dt.normalize()
@@ -306,7 +308,7 @@ def run_analysis(self, job_id: str) -> dict[str, Any]:  # noqa: ANN001 - сиг�
             )
             return {"job_id": job_id, "state": JobState.FAILED.value}
 
-        series = load_series(anon_id, date_from, date_to)
+        series = load_series(anon_id, date_from, date_to, data_dir=get_settings().model_data_dir)
 
         _advance(job_id, JobState.PREPROCESSING)
         with session_scope() as session:

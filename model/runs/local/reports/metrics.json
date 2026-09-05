@@ -1,0 +1,111 @@
+{
+  "development_folds": [
+    0,
+    1,
+    2
+  ],
+  "weights": {
+    "lgb": 0.05562437133678748,
+    "lgb_nodonor": 0.36053120654675447,
+    "linear": 0.0,
+    "midpoint": 0.0,
+    "source_experts": 0.583844422116458
+  },
+  "development": {
+    "lgb": {
+      "n": 3492,
+      "rmse": 0.05606627828234971,
+      "mae": 0.03625819020035325,
+      "gapscore_local": 13.18
+    },
+    "lgb_nodonor": {
+      "n": 3492,
+      "rmse": 0.05595503022133318,
+      "mae": 0.03605616078655904,
+      "gapscore_local": 13.21
+    },
+    "linear": {
+      "n": 3492,
+      "rmse": 0.09439185797281763,
+      "mae": 0.06655312207398949,
+      "gapscore_local": 1.68
+    },
+    "midpoint": {
+      "n": 3492,
+      "rmse": 0.09181240527901281,
+      "mae": 0.06535964896612827,
+      "gapscore_local": 2.46
+    },
+    "source_experts": {
+      "n": 3492,
+      "rmse": 0.05508264068905621,
+      "mae": 0.03462779948569684,
+      "gapscore_local": 13.48
+    }
+  },
+  "development_ensemble": {
+    "n": 3492,
+    "rmse": 0.054304648854217284,
+    "mae": 0.03421405378438616,
+    "gapscore_local": 13.71
+  },
+  "audit_note": "Fold 3 is never used for weights or model hyperparameters.",
+  "audit": {
+    "linear": {
+      "n": 1079,
+      "rmse": 0.08678139276786229,
+      "mae": 0.06119309907141642,
+      "gapscore_local": 3.97
+    },
+    "midpoint": {
+      "n": 1079,
+      "rmse": 0.08548548561487662,
+      "mae": 0.060067111540610535,
+      "gapscore_local": 4.35
+    },
+    "lgb": {
+      "n": 1079,
+      "rmse": 0.05936410219107791,
+      "mae": 0.03815051891810096,
+      "gapscore_local": 12.19
+    },
+    "lgb_nodonor": {
+      "n": 1079,
+      "rmse": 0.059166413159146294,
+      "mae": 0.03810567778827843,
+      "gapscore_local": 12.25
+    },
+    "source_experts": {
+      "n": 1079,
+      "rmse": 0.056230088318256495,
+      "mae": 0.03526325651673045,
+      "gapscore_local": 13.13
+    }
+  },
+  "audit_ensemble": {
+    "n": 1079,
+    "rmse": 0.05614539328617412,
+    "mae": 0.03531964984856748,
+    "gapscore_local": 13.16
+  },
+  "audit_by_source": {
+    "0": {
+      "n": 347,
+      "rmse": 0.05931850419052184,
+      "mae": 0.03402012829375145,
+      "gapscore_local": 12.2
+    },
+    "1": {
+      "n": 530,
+      "rmse": 0.05662222720654542,
+      "mae": 0.0359069636829298,
+      "gapscore_local": 13.01
+    },
+    "2": {
+      "n": 202,
+      "rmse": 0.04880416603660669,
+      "mae": 0.03601102434019685,
+      "gapscore_local": 15.36
+    }
+  }
+}

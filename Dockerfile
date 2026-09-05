@@ -11,14 +11,22 @@ ENV PYTHONUNBUFFERED=1 \
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.31 /uv /usr/local/bin/uv
 
+# libgomp1 — рантайм OpenMP, без которого не грузится LightGBM: колесо тянет
+# libgomp.so.1 динамически, а в slim-образе его нет, и импорт падает уже при
+# старте воркера (`OSError: libgomp.so.1: cannot open shared object file`).
+# Ставится отдельным слоем до зависимостей: он меняется куда реже питоновских.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # README.md копируется вместе с манифестом: pyproject объявляет `readme = "README.md"`,
 # и hatchling валидирует метаданные при сборке пакета. Без него `uv sync` падает
 # с `OSError: Readme file does not exist` — то есть стенд не собирается вообще.
 COPY pyproject.toml uv.lock README.md ./
-# extra ml нужен именно в рантайме: C-04 — trained-бандл, и joblib поднимает
-# ColumnTransformer из sklearn и CatBoostRegressor. Без него загрузка модели
+# extra ml нужен именно в рантайме: обученная смесь из `model/` поднимается pickle-ом
+# и тянет CatBoostRegressor, LGBMRegressor и scikit-learn. Без него загрузка модели
 # падает уже при старте воркера, а не при первом запросе.
 # extra geo — shapely и pyproj: валидация контура и площадь в projected CRS
 # выполняются на сервере (инвариант 2), значит нужны и API, и воркеру.
@@ -39,8 +47,8 @@ RUN useradd --create-home --uid 10001 appuser \
     # Каталог кэша создаётся в образе и сразу отдаётся appuser: пустой named volume
     # Docker инициализирует правами каталога из образа. Иначе том монтируется как
     # root:root 0755 и запись кэша в BE-014 упрётся в PermissionError.
-    && mkdir -p /srv/cache /srv/model_bundle \
-    && chown -R appuser:appuser /app /opt/venv /srv/cache /srv/model_bundle
+    && mkdir -p /srv/cache /srv/model \
+    && chown -R appuser:appuser /app /opt/venv /srv/cache /srv/model
 USER appuser
 
 EXPOSE 8000

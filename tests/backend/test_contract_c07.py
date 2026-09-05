@@ -50,6 +50,9 @@ EXPECTED_TRANSITIONS = {
 #: Все 15 путей контракта. Список полный, а не выборочный: удаление роута обязано
 #: валить тест, иначе `docs/api.md` и код разъезжаются молча.
 EXPECTED_PATHS = {
+    "/api/v1/auth/email-code",
+    "/api/v1/auth/session",
+    "/api/v1/auth/me",
     "/health/live",
     "/health/ready",
     "/health/providers",
@@ -212,24 +215,24 @@ def test_field_search_accepts_point(client) -> None:
     assert client.post("/api/v1/field-search", json={"limit": 5}).status_code == 422
 
 
-def test_analysis_rejects_reversed_and_huge_date_range(client) -> None:
+def test_analysis_rejects_reversed_and_huge_date_range(authed_client) -> None:
     base = {"polygon_id": "p", "date_from": "2024-05-01", "date_to": "2024-01-01"}
-    assert client.post("/api/v1/analyses", json=base).status_code == 422
+    assert authed_client.post("/api/v1/analyses", json=base).status_code == 422
     huge = {"polygon_id": "p", "date_from": "1990-01-01", "date_to": "2024-01-01"}
-    assert client.post("/api/v1/analyses", json=huge).status_code == 422
+    assert authed_client.post("/api/v1/analyses", json=huge).status_code == 422
 
 
-def test_unknown_body_field_is_rejected(client) -> None:
+def test_unknown_body_field_is_rejected(authed_client) -> None:
     """Опечатка фронта обязана давать 422, а не молча анализировать другой период."""
     body = {"polygon_id": "p", "date_from": "2024-01-01", "date_to": "2024-02-01", "dateFrom": "x"}
-    assert client.post("/api/v1/analyses", json=body).status_code == 422
+    assert authed_client.post("/api/v1/analyses", json=body).status_code == 422
 
 
-def test_bbox_is_validated(client) -> None:
-    assert client.get("/api/v1/polygons?bbox=nonsense").status_code == 422
-    assert client.get("/api/v1/polygons?bbox=1,2,3").status_code == 422
-    assert client.get("/api/v1/polygons?bbox=200,2,3,4").status_code == 422
-    assert client.get("/api/v1/polygons?bbox=1,2,3,4").status_code == 200
+def test_bbox_is_validated(authed_client) -> None:
+    assert authed_client.get("/api/v1/polygons?bbox=nonsense").status_code == 422
+    assert authed_client.get("/api/v1/polygons?bbox=1,2,3").status_code == 422
+    assert authed_client.get("/api/v1/polygons?bbox=200,2,3,4").status_code == 422
+    assert authed_client.get("/api/v1/polygons?bbox=1,2,3,4").status_code == 200
 
 
 def test_every_error_uses_the_contract_envelope(client, schema) -> None:
@@ -255,7 +258,7 @@ def test_export_csv_is_not_declared_as_json(schema) -> None:
     assert "text/csv" in content["content"]
 
 
-def test_polygon_list_envelope_is_consistent(client) -> None:
+def test_polygon_list_envelope_is_consistent(authed_client) -> None:
     """Список полигонов — всегда конверт `{items, total}`, и `total` согласован.
 
     Прежняя редакция требовала буквально пустого списка: это описывало заглушку
@@ -263,12 +266,66 @@ def test_polygon_list_envelope_is_consistent(client) -> None:
     состояния стенда — но форма ответа и согласованность `total` обязаны держаться
     при любом содержимом, включая пустое.
     """
-    response = client.get("/api/v1/polygons")
+    response = authed_client.get("/api/v1/polygons")
     assert response.status_code == 200
     body = response.json()
     assert set(body) == {"items", "total"}
     assert isinstance(body["items"], list)
     assert body["total"] >= len(body["items"])
+
+
+def test_polygon_with_an_analysis_is_actually_deleted(authed_client) -> None:
+    """Удаление поля с анализами обязано доходить до базы, а не только до ответа.
+
+    Каскад объявлен в схеме, но ORM про него не знает и сначала обнуляла
+    `analyses.polygon_id` — колонку NOT NULL. Транзакция падала на коммите, уже
+    после отправленного 204: интерфейс показывал «поле удалено», а после
+    обновления страницы оно возвращалось. Проверяется именно исчезновение строки,
+    а не код ответа: код был правильным и тогда.
+
+    Анализ создаётся прямо в базе, а не через `POST /analyses`: роут ставит
+    задачу в Celery, и без брокера тест ждал бы его таймаута минутами, проверяя
+    при этом совсем не то.
+    """
+    from datetime import date
+
+    from apps.db.base import session_scope
+    from apps.db.models import Analysis, AnalysisJob
+
+    created = authed_client.post(
+        "/api/v1/polygons",
+        json={
+            "name": "Поле с анализом",
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [[39.5, 45.5], [39.52, 45.5], [39.52, 45.52], [39.5, 45.52], [39.5, 45.5]]
+                ],
+            },
+            "source": "manual",
+            "properties": {"anon_polygon_id": "AOI-0005"},
+        },
+    )
+    assert created.status_code == 201
+    polygon_id = created.json()["id"]
+
+    with session_scope() as db:
+        analysis = Analysis(
+            polygon_id=polygon_id,
+            date_from=date(2024, 4, 1),
+            date_to=date(2024, 4, 30),
+            geometry_hash=created.json()["geometry_hash"],
+            pipeline_version="0.1.0",
+            state="QUEUED",
+        )
+        db.add(analysis)
+        db.flush()
+        db.add(AnalysisJob(analysis_id=analysis.id, state="QUEUED"))
+
+    assert authed_client.delete(f"/api/v1/polygons/{polygon_id}").status_code == 204
+    assert authed_client.get(f"/api/v1/polygons/{polygon_id}").status_code == 404
+    ids = [item["id"] for item in authed_client.get("/api/v1/polygons").json()["items"]]
+    assert polygon_id not in ids
 
 
 def test_reference_polygons_lists_available_series(client) -> None:
@@ -291,14 +348,14 @@ def test_reference_polygons_lists_available_series(client) -> None:
         assert first["observations"] >= body["items"][-1]["observations"]
 
 
-def test_analysis_without_data_source_is_refused_before_any_job(client) -> None:
+def test_analysis_without_data_source_is_refused_before_any_job(authed_client) -> None:
     """Поле без привязки к ряду отвергается сразу, а не падающей джобой.
 
     Раньше запрос принимался, создавалась запись анализа и джоба, воркер через
     несколько секунд падал `NO_DATA_SOURCE`, а в БД оставалась мёртвая пара строк.
     Пользователь при этом видел ошибку уже после ожидания.
     """
-    created = client.post(
+    created = authed_client.post(
         "/api/v1/polygons",
         json={
             "name": "Поле без ряда (тест)",
@@ -315,7 +372,7 @@ def test_analysis_without_data_source_is_refused_before_any_job(client) -> None:
         pytest.skip("БД недоступна: тест требует поднятого PostgreSQL")
     polygon_id = created.json()["id"]
     try:
-        response = client.post(
+        response = authed_client.post(
             "/api/v1/analyses",
             json={"polygon_id": polygon_id, "date_from": "2024-04-01", "date_to": "2024-09-30"},
         )
@@ -326,4 +383,79 @@ def test_analysis_without_data_source_is_refused_before_any_job(client) -> None:
         assert "NO_DATA_SOURCE" in detail
         assert "reference-polygons" in detail
     finally:
-        client.delete(f"/api/v1/polygons/{polygon_id}")
+        authed_client.delete(f"/api/v1/polygons/{polygon_id}")
+
+
+def test_data_requires_login(client) -> None:
+    """Без входа данные недоступны.
+
+    Проверяется именно 401, а не «страница не сломалась»: до появления входа
+    любой, кто знал адрес, видел и правил чужие поля.
+    """
+    assert client.get("/api/v1/polygons").status_code == 401
+    assert client.get("/api/v1/analyses/whatever/series").status_code == 401
+    assert client.post("/api/v1/analyses", json={
+        "polygon_id": "x", "date_from": "2026-01-01", "date_to": "2026-02-01"}).status_code == 401
+
+
+def test_reference_list_stays_public(client) -> None:
+    """Справочник рядов остаётся открытым.
+
+    Это перечень доступных источников, а не чьи-то данные: прятать его за входом
+    значит не дать понять, о чём вообще сервис, до регистрации.
+    """
+    assert client.get("/api/v1/reference-polygons").status_code == 200
+
+
+def test_guest_gets_an_answer_not_an_error(client) -> None:
+    """`/auth/me` отвечает и гостю.
+
+    401 здесь смешал бы «не вошёл» и «сервис сломан», а интерфейсу нужно их
+    различать: в первом случае показать форму, во втором — сообщение об ошибке.
+    """
+    response = client.get("/api/v1/auth/me")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["authenticated"] is False
+    assert "login_available" in body
+
+
+def test_malformed_email_never_reaches_the_idp(client) -> None:
+    """Явная опечатка отсекается до обращения к IdP.
+
+    У внешнего сервиса лимит на отправку писем, и тратить его на «не-почта»
+    значит приближать момент, когда настоящий человек не получит код.
+    """
+    response = client.post("/api/v1/auth/email-code", json={"email": "не-почта"})
+    assert response.status_code == 422
+
+
+def test_own_fields_only(authed_client) -> None:
+    """Пользователь видит только свои поля.
+
+    Тест создаёт поле от одного владельца и проверяет, что список у него
+    непустой, а гость не получает ничего, кроме 401.
+    """
+    created = authed_client.post("/api/v1/polygons", json={
+        "name": "Поле теста разделения", "source": "manual",
+        "geometry": {"type": "Polygon", "coordinates": [
+            [[47.0, 43.0], [47.011, 43.0], [47.011, 43.008], [47.0, 43.008], [47.0, 43.0]]]},
+    })
+    assert created.status_code == 201
+    polygon_id = created.json()["id"]
+    try:
+        mine = authed_client.get("/api/v1/polygons").json()
+        assert any(item["id"] == polygon_id for item in mine["items"])
+
+        # Тот же клиент без cookie — уже посторонний.
+        authed_client.cookies.clear()
+        assert authed_client.get("/api/v1/polygons").status_code == 401
+        assert authed_client.get(f"/api/v1/polygons/{polygon_id}").status_code == 401
+    finally:
+        from apps.db.base import session_scope
+        from apps.db.models import Polygon
+
+        with session_scope() as db:
+            row = db.get(Polygon, polygon_id)
+            if row is not None:
+                db.delete(row)

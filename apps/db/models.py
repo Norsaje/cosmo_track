@@ -49,6 +49,57 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+class User(Base):
+    """Пользователь сервиса. Личность подтверждает Braining ID, мы её только храним.
+
+    Пароля здесь нет и не будет: вход по коду на почту делает внешний IdP,
+    и хранить у себя ещё один секрет — значит завести вторую точку утечки
+    там, где она не нужна.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    #: Идентификатор в Braining ID. Именно он связывает нашу запись с личностью:
+    #: почту человек может сменить у себя в профиле, и привязка по ней развалилась бы.
+    braining_user_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    #: Почта хранится для показа в интерфейсе, а не для опознания.
+    email: Mapped[str | None] = mapped_column(String(320))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_users_braining_id", "braining_user_id"),)
+
+
+class Session(Base):
+    """Сессия входа. Живёт 30 дней и хранится хэшем, а не открытым значением.
+
+    В cookie уходит случайный токен, в базе лежит его SHA256. Утечка дампа базы
+    тогда не даёт войти ни в один аккаунт: по хэшу токен не восстановить.
+    """
+
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=_uuid)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    user: Mapped[User] = relationship()
+
+    __table_args__ = (
+        Index("ix_sessions_token", "token_hash"),
+        Index("ix_sessions_user", "user_id"),
+    )
+
+
 class Polygon(Base):
     """Контур поля. Геометрия хранится в EPSG:4326 — это граница API (инвариант 2).
 
@@ -89,8 +140,21 @@ class Polygon(Base):
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), onupdate=func.now()
     )
+    #: Владелец контура. Nullable намеренно: поля, созданные до появления входа,
+    #: остаются в базе как есть — удалять чужие данные ради стройности схемы
+    #: нельзя. Владельцу они не видны, потому что выборка идёт по user_id.
+    user_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("users.id", ondelete="CASCADE")
+    )
 
-    analyses: Mapped[list[Analysis]] = relationship(back_populates="polygon")
+    #: passive_deletes обязателен: каскад объявлен в схеме (`ondelete="CASCADE"`),
+    #: но ORM про него не знает и при удалении полигона сначала обнуляет
+    #: `analyses.polygon_id` — колонку NOT NULL. Транзакция падала на коммите,
+    #: уже после отправленного 204: интерфейс показывал «поле удалено», а после
+    #: обновления страницы оно возвращалось. Теперь удаление отдаётся базе.
+    analyses: Mapped[list[Analysis]] = relationship(
+        back_populates="polygon", cascade="all, delete", passive_deletes=True
+    )
 
     __table_args__ = (
         # Список источников закрыт CHECK'ом, а не enum-типом: добавить провайдера
@@ -101,6 +165,7 @@ class Polygon(Base):
         ),
         Index("ix_polygons_geometry", "geometry", postgresql_using="gist"),
         Index("ix_polygons_geometry_hash", "geometry_hash"),
+        Index("ix_polygons_user", "user_id"),
     )
 
 
@@ -139,7 +204,11 @@ class Analysis(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     polygon: Mapped[Polygon] = relationship(back_populates="analyses")
-    jobs: Mapped[list[AnalysisJob]] = relationship(back_populates="analysis")
+    #: Та же причина, что и у `Polygon.analyses`: `analysis_jobs.analysis_id` —
+    #: NOT NULL с каскадом в схеме, и обнулять его перед удалением ORM не должна.
+    jobs: Mapped[list[AnalysisJob]] = relationship(
+        back_populates="analysis", cascade="all, delete", passive_deletes=True
+    )
 
     __table_args__ = (
         UniqueConstraint(

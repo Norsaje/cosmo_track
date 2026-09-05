@@ -6,13 +6,11 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
 pytest.importorskip("fastapi", reason="нужен extra `web`")
 
-from apps.api.routes.health import _bundle_status
+from apps.api.routes.health import _model_status
 from apps.api.schemas import ComponentStatus
 
 
@@ -69,31 +67,44 @@ def test_aggregate_status_is_the_weakest_component(monkeypatch, client) -> None:
     monkeypatch.setattr(health_module, "_database_status", lambda _: ComponentStatus.OK)
     monkeypatch.setattr(health_module, "_redis_status", lambda _: ComponentStatus.OK)
 
-    monkeypatch.setattr(health_module, "_bundle_status", lambda _: ComponentStatus.OK)
+    monkeypatch.setattr(health_module, "_model_status", lambda *_: ComponentStatus.OK)
     assert client.get("/health/ready").json()["status"] == ComponentStatus.OK
 
-    monkeypatch.setattr(health_module, "_bundle_status", lambda _: ComponentStatus.DEGRADED)
+    monkeypatch.setattr(health_module, "_model_status", lambda *_: ComponentStatus.DEGRADED)
     assert client.get("/health/ready").json()["status"] == ComponentStatus.DEGRADED
 
-    monkeypatch.setattr(health_module, "_bundle_status", lambda _: ComponentStatus.DOWN)
+    monkeypatch.setattr(health_module, "_model_status", lambda *_: ComponentStatus.DOWN)
     assert client.get("/health/ready").json()["status"] == ComponentStatus.DOWN
 
 
-def test_bundle_status_distinguishes_missing_empty_and_ready(tmp_path) -> None:
+def test_model_status_distinguishes_missing_empty_and_ready(tmp_path) -> None:
     """Главная защита от лжи о готовности модели.
 
-    Compose монтирует `./infra/model_bundle`, и Docker создаёт отсутствующий путь
-    пустым каталогом. Проверка `isdir` в этом случае вернула бы ok при полном
-    отсутствии бандла — ровно то, что запрещает red-team-пункт перед CP-3.
+    Compose монтирует каталог модели, и Docker создаёт отсутствующий путь пустым.
+    Проверка `isdir` в этом случае вернула бы ok при полном отсутствии модели —
+    ровно то, что запрещает red-team-пункт перед CP-3. Проверяются все файлы
+    поставки, а не один: смесь без своего набора не восстановит ни одной точки.
     """
-    assert _bundle_status(str(tmp_path / "missing")) == ComponentStatus.NOT_CONFIGURED
-    assert _bundle_status(str(tmp_path)) == ComponentStatus.DEGRADED
-    (tmp_path / "manifest.json").write_text(json.dumps({"schema_version": "1.0"}), encoding="utf-8")
-    assert _bundle_status(str(tmp_path)) == ComponentStatus.OK
+    assert _model_status(str(tmp_path / "missing"), "local") == ComponentStatus.NOT_CONFIGURED
+    assert _model_status(str(tmp_path), "local") == ComponentStatus.DEGRADED
+
+    bundle = tmp_path / "runs/local/artifacts"
+    bundle.mkdir(parents=True)
+    (bundle / "model_bundle.pkl").write_bytes(b"not a real pickle")
+    # Смесь есть, набора нет — по-прежнему деградация, а не готовность.
+    assert _model_status(str(tmp_path), "local") == ComponentStatus.DEGRADED
+
+    (tmp_path / "data").mkdir()
+    for name in ("train.csv", "test_features.csv"):
+        (tmp_path / "data" / name).write_text("anon_polygon_id,date\n", encoding="utf-8")
+    assert _model_status(str(tmp_path), "local") == ComponentStatus.OK
+    # Чужое имя запуска — не готовность: переключение на Kaggle-прогон обязано
+    # быть видно в health, а не всплывать первой упавшей джобой.
+    assert _model_status(str(tmp_path), "kaggle") == ComponentStatus.DEGRADED
 
 
-def test_ready_uses_bundle_path_from_settings(client, tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("COSMO_MODEL_BUNDLE_PATH", str(tmp_path))
+def test_ready_uses_model_path_from_settings(client, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("COSMO_MODEL_PACKAGE_PATH", str(tmp_path))
     from apps.api.settings import get_settings
 
     get_settings.cache_clear()

@@ -110,14 +110,19 @@ def test_cached_result_is_marked(page: str) -> None:
     assert "из кэша" in page
 
 
-def test_temporal_transfer_limitation_is_visible(page: str) -> None:
+def test_model_limitation_is_visible(page: str) -> None:
     """Ограничение модели проговаривается в интерфейсе, а не только в README.
 
-    Владелец C-04 предупреждает прямым текстом: на переносе в будущий сезон
-    ансамбль уступает простому baseline. Умолчать об этом на демо нельзя.
+    Скрытые ответы организаторов недоступны: всё измеренное качество — локальное,
+    на двадцати полигонах нового test. Показать число без этой оговорки значит
+    выдать локальную оценку за официальный балл.
     """
-    assert "Перенос на будущий сезон" in page
-    assert "уступает простому baseline" in page
+    assert "измерено локально" in page
+    assert "официальный балл не" in page
+    # Ограничение прежнего бандла C-04 к работающей модели не относится: на её
+    # audit смесь baseline не уступает. Оставить старую фразу значит приписать
+    # одной модели слабое место другой.
+    assert "уступает простому baseline" not in page
 
 
 def test_chart_axis_is_not_clamped_to_physical_range(page: str) -> None:
@@ -444,6 +449,45 @@ def test_bottom_dock_offers_both_sections(page: str) -> None:
     assert "<svg" in dock_map.group(0) and "<svg" in dock_fields.group(0)
     # Текущий раздел помечен состоянием, а не только цветом.
     assert 'aria-selected' in page
+
+
+def test_offscreen_panel_does_not_widen_the_document(page: str) -> None:
+    """Закрытая панель не имеет права расширять страницу.
+
+    Она стоит `translateX(100%)`, то есть физически лежит справа за экраном и
+    добавляет к ширине прокрутки свои 335 px. `overflow` у `body` не помогает:
+    при `visible` у `html` браузер поднимает свойство на область просмотра, а
+    сам body остаётся `visible`. Телефон видит документ шире экрана, уменьшает
+    масштаб — и справа появляется белая полоса в ширину панели. Клип ставится
+    на `main`, внутри которого панель и лежит.
+    """
+    assert re.search(r"main\s*\{[^}]*overflow:\s*hidden", page)
+
+
+def test_layout_switches_by_height_too(page: str) -> None:
+    """Телефон в альбомной ориентации остаётся с накладной панелью.
+
+    Порог только по ширине отправлял экран 844x390 в «десктоп»: панель на
+    380 px намертво занимала половину экрана, а карте оставалась полоса.
+    Условие в CSS и в JS обязано быть одним и тем же — иначе CSS нарисует
+    накладную панель, а скрипт будет считать её пристыкованной и перестанет
+    открывать.
+    """
+    assert "(min-width: 768px) and (min-height: 600px)" in page
+    assert "@media (max-width: 767px), (max-height: 599px)" in page
+    assert 'matchMedia("(max-width: 767px), (max-height: 599px)")' in page
+    # Точки переключения без учёта высоты остаться не должно.
+    assert "@media (min-width: 768px) {" not in page
+
+
+def test_default_period_covers_the_year_with_data(page: str) -> None:
+    """Период по умолчанию — 2024 год целиком.
+
+    Наблюдения в наборе заканчиваются 30 октября 2024-го. Период по текущей
+    дате не содержал бы ни одной строки, и первый же запуск анализа падал бы
+    с «нет строк в диапазоне» на поле, у которого данные есть.
+    """
+    assert 'dateFrom: "2024-01-01", dateTo: "2024-12-31"' in page
 
 
 def test_brand_is_braining_space(page: str) -> None:

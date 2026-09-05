@@ -133,14 +133,38 @@
 
     /* ---------------------------------------------------------------- шапка */
     header {
-      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      /* nowrap, а не wrap: с переносом кнопка выхода уезжала под слоган на
+         второй строкой и шапка становилась вдвое выше на узком экране. Тесниться
+         должен слоган — он декоративный, а кнопка нужна всегда. */
+      display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
       padding: 10px 16px; background: var(--content1);
       border-bottom: var(--divider-weight) solid var(--divider);
       padding-top: calc(10px + env(safe-area-inset-top));
     }
-    .brand { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-    .brand b { font-size: var(--font-medium); line-height: var(--lh-medium); letter-spacing: -0.01em; }
-    .brand span { color: var(--muted); font-size: var(--font-tiny); }
+    .brand { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1 1 auto; }
+    .brand b { font-size: var(--font-medium); line-height: var(--lh-medium); letter-spacing: -0.01em;
+               white-space: nowrap; }
+    .brand span {
+      color: var(--muted); font-size: var(--font-tiny);
+      /* Слоган сжимается первым и обрывается многоточием: название продукта
+         обрезать нельзя, а слоган переживёт. */
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    /* Правый угол шапки: состояние сервиса и выход. Место постоянное — выход
+       ищут в шапке, а не в панели, которая на телефоне ещё и закрыта. */
+    .header-actions { margin-left: auto; flex: none; display: flex; align-items: center; gap: 8px; }
+    .header-logout { min-height: 36px; padding: 0 10px; font-size: var(--font-tiny); }
+    @media (max-width: 560px) {
+      /* На телефоне подпись уступает место слогану: значок двери с aria-label
+         остаётся понятным, а вот шапка в две строки — нет. */
+      .header-logout-text { display: none; }
+      .header-logout { padding: 0 9px; }
+      /* Даже со значком слогану не хватает ровно тех сорока пикселей, что занял
+         выход, и он обрывался посреди слова — вид сломанной вёрстки. Поэтому у
+         вошедшего на узком экране остаётся название, а слоган уходит целиком.
+         У гостя кнопки нет, место есть, слоган виден полностью. */
+      header:has(#btn-logout:not([hidden])) .brand span { display: none; }
+    }
 
     /* ---------------------------------------------------------------- чипы */
     .chip {
@@ -214,7 +238,20 @@
     .alert-success::before { content: "✓"; }
 
     /* ============================================================ раскладка */
-    main { flex: 1; position: relative; min-height: 0; }
+    main {
+      flex: 1; position: relative; min-height: 0;
+      /* overflow:hidden обязателен, и это не косметика. Закрытая панель стоит
+         `translateX(100%)`, то есть физически лежит справа за экраном и
+         увеличивает ширину прокрутки документа на свои 335 px. `overflow` у
+         `body` здесь не спасает: когда у `html` он `visible`, браузер
+         поднимает свойство с body на область просмотра, а сам body остаётся
+         `visible` — и вылет панели по-прежнему считается шириной страницы.
+         Телефон, увидев документ шире экрана, уменьшает масштаб, чтобы
+         поместить его целиком: карта сжимается влево, а справа появляется
+         белая полоса ровно в ширину панели. Клип здесь оставляет документ
+         равным экрану при любом повороте. */
+      overflow: hidden;
+    }
 
     /* Карта на весь экран: она — главный объект работы, а не полоска сверху.
        position:absolute, потому что лист лежит поверх неё, а не рядом. */
@@ -275,6 +312,10 @@
       font-size: var(--font-tiny); writing-mode: vertical-rl;
       cursor: pointer; border: none; min-height: 0;
       transition: opacity .2s ease;
+      /* none, а не auto: с разрешённой прокруткой браузер забирал жест себе
+         после первого же движения пальца и присылал pointercancel — панель
+         переставала следовать за пальцем, хотя тянули ровно за язычок. */
+      touch-action: none;
     }
     .edge-hint::after {
       content: ""; display: block; width: 4px; height: 34px; border-radius: 999px;
@@ -300,10 +341,18 @@
     .dock button svg { display: block; }
     .dock button[aria-selected="true"] { background: var(--primary-soft); color: var(--primary); }
 
-    /* Атрибуция OpenStreetMap обязана оставаться читаемой — это условие их
-       лицензии, а не оформление. Мини-меню стоит по центру снизу и перекрывало
-       её, поэтому на узких экранах атрибуция поднимается над меню. */
-    @media (max-width: 767px) {
+    /* ---------------------------------------------- точка переключения раскладки
+       Условие двойное: широкий И достаточно высокий экран. Только по ширине
+       телефон в альбомной ориентации (844x390) попадал в «десктоп», получал
+       намертво пристыкованную панель в 380 px и отдавал ей почти половину
+       экрана — на снимке это выглядит как большое белое поле справа, а карте
+       остаётся полоса. Высота 600 px разделяет планшет (в альбомной 768+) и
+       телефон (360-430), поэтому порог стоит здесь.
+
+       Тот же список условий продублирован в JS (`isMobile`). Разъехаться им
+       нельзя: CSS нарисует накладную панель, а скрипт будет считать, что она
+       пристыкована, и перестанет её открывать. */
+    @media (max-width: 767px), (max-height: 599px) {
       /* Атрибуция поднята над переключателем подложки и мини-меню. Она длинная
          (OpenStreetMap плюс Esri) и тянется через весь низ экрана, поэтому
          разойтись с ними по горизонтали не выйдет — только по высоте.
@@ -311,6 +360,13 @@
       .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
         bottom: calc(120px + env(safe-area-inset-bottom));
       }
+    }
+    @media (max-height: 599px) {
+      /* На низком экране (телефон в альбомной) те же 120 px поднимают атрибуцию
+         ровно в язычок «потяните влево», который стоит по центру правого края,
+         и хвост «MapLibre» уезжает под него. Отступ справа шире язычка: текст
+         атрибуции обязан читаться целиком — это условие лицензии, а не вёрстка. */
+      .maplibregl-ctrl-bottom-right { right: 42px; }
     }
 
     /* Кнопки поверх карты: рисование доступно, пока панель закрыта. */
@@ -323,12 +379,19 @@
       max-width: calc(100% - 24px);
     }
     .map-actions button {
-      box-shadow: var(--shadow-md); background: var(--content1);
+      box-shadow: var(--shadow-md);
       /* Кнопка не сжимается до многоточия и не переносит подпись: в колонке
          flex-элементы по умолчанию сжимаются по высоте содержимого, а текст
          внутри уезжал за край. */
       white-space: nowrap; flex: none;
     }
+    /* Собственный фон — только у кнопок без варианта. Раньше `background` стоял
+       на `.map-actions button`, и его специфичность (класс + тег) перебивала
+       `.btn-primary` (один класс): у «Завершить контур» фон становился светлым,
+       а цвет текста оставался primary-fg, то есть белым. Подпись пропадала —
+       на карте висела пустая плашка. `.btn-bordered` фон получить обязан:
+       прозрачная «Отмена» поверх снимка нечитаема. */
+    .map-actions button:not(.btn-primary) { background: var(--content1); }
 
     /* Переключатель подложки — внизу слева. Отдельно от действий над полем:
        это свойство карты, а не операция над данными. */
@@ -338,7 +401,7 @@
       box-shadow: var(--shadow-md); background: var(--content1);
       white-space: nowrap;
     }
-    @media (min-width: 768px) {
+    @media (min-width: 768px) and (min-height: 600px) {
       /* На десктопе мини-меню нет, и запас снизу не нужен. */
       .map-basemap { bottom: 12px; }
     }
@@ -353,12 +416,12 @@
       box-shadow: var(--shadow-lg); font-size: var(--font-tiny);
       line-height: var(--lh-small); text-align: center;
     }
-    @media (min-width: 768px) {
+    @media (min-width: 768px) and (min-height: 600px) {
       .draw-hint { bottom: 16px; left: calc(50% - 190px); }
     }
 
     /* ------------------------------------------- планшет и десктоп: без жестов */
-    @media (min-width: 768px) {
+    @media (min-width: 768px) and (min-height: 600px) {
       .sheet {
         width: 380px; transform: none !important; box-shadow: none;
         border-left: var(--divider-weight) solid var(--divider);
@@ -477,19 +540,34 @@
       <b>Braining Space</b>
       <span>Думаем о вашем хозяйстве за вас</span>
     </div>
-    <!-- Индикатор появляется только при проблеме. Постоянно зелёный значок не несёт
-         информации: глаз перестаёт его замечать ровно к тому моменту, когда он
-         впервые становится важным. aria-live озвучивает появление скринридеру. -->
-    <span id="health-chip" class="chip chip-default" style="margin-left:auto"
-          role="status" aria-live="polite" hidden>
-      <i class="dot"></i><span id="health-text"></span>
-    </span>
+    <div class="header-actions">
+      <!-- Индикатор появляется только при проблеме. Постоянно зелёный значок не несёт
+           информации: глаз перестаёт его замечать ровно к тому моменту, когда он
+           впервые становится важным. aria-live озвучивает появление скринридеру. -->
+      <span id="health-chip" class="chip chip-default" role="status" aria-live="polite" hidden>
+        <i class="dot"></i><span id="health-text"></span>
+      </span>
+      <!-- Выход живёт в шапке, а не в панели: панель на телефоне закрыта, и
+           единственная кнопка выхода уезжала за экран вместе с ней. -->
+      <button class="btn-bordered header-logout" id="btn-logout" type="button" hidden
+              title="Выйти из аккаунта" aria-label="Выйти из аккаунта">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 17v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v2"/>
+          <path d="M20 12H10"/><path d="m17 9 3 3-3 3"/>
+        </svg>
+        <span class="header-logout-text">Выйти</span>
+      </button>
+    </div>
   </header>
 
   <main>
     <div id="map" role="application" aria-label="Карта полей"></div>
 
-    <div class="map-actions">
+    <!-- Кнопки рисования скрыты у гостя целиком: поле сохраняется в аккаунт, и
+         предложить обвести контур, чтобы на сохранении ответить 401, — значит
+         потратить чужую работу впустую. -->
+    <div class="map-actions" id="map-actions" hidden>
       <button id="btn-draw" class="btn-sm">Нарисовать поле</button>
       <button id="btn-cancel" class="btn-sm btn-bordered" hidden>Отмена</button>
       <button id="btn-finish" class="btn-sm btn-primary" hidden disabled>Завершить контур</button>
@@ -546,6 +624,38 @@
       </div>
 
       <div class="sheet-body" id="sheet-body">
+        <!-- Экран входа заменяет содержимое панели целиком: показывать список
+             полей рядом с формой входа бессмысленно — своих полей у гостя нет,
+             а чужие он видеть не должен. -->
+        <div class="card" id="login-card" hidden>
+          <h2>Вход</h2>
+          <div class="muted" style="color:var(--muted);font-size:var(--font-tiny)">
+            Поля и анализы хранятся у вашей учётной записи. Вход по коду из письма —
+            пароль не нужен.
+          </div>
+
+          <div id="login-step-email">
+            <label for="login-email">Электронная почта</label>
+            <input id="login-email" type="email" inputmode="email" autocomplete="email"
+                   placeholder="agronom@example.com" />
+            <button class="btn-primary" id="btn-send-code" style="width:100%;margin-top:10px">
+              Получить код
+            </button>
+          </div>
+
+          <div id="login-step-code" hidden>
+            <label for="login-code">Код из письма</label>
+            <input id="login-code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                   placeholder="123456" />
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <button class="btn-primary" id="btn-verify-code" style="flex:1">Войти</button>
+              <button class="btn-bordered" id="btn-login-back">Назад</button>
+            </div>
+          </div>
+
+          <div id="login-message"></div>
+        </div>
+
         <div class="card" id="save-form" hidden>
           <h2>Сохранить поле</h2>
           <label for="field-name">Название поля</label>
@@ -562,7 +672,7 @@
           </div>
         </div>
 
-        <div class="card">
+        <div class="card" id="polygons-card" hidden>
           <h2>Поля</h2>
           <ul class="list" id="polygons" aria-label="Список полей">
             <li class="skeleton" aria-hidden="true"></li>
@@ -614,24 +724,154 @@
       // Период хранится в состоянии, а не только в полях ввода: плитка
       // перерисовывается при каждом выборе, и вместе с ней пересоздаются input —
       // без этого выбранные даты сбрасывались бы к значениям по умолчанию.
-      // По умолчанию — текущий год целиком: интерес почти всегда к тому, что
-      // происходит сейчас, а не к прошлому сезону. Дата берётся локальная,
-      // а не из toISOString(): он переводит в UTC и вечером даёт завтрашний день.
-      dateFrom: "2026-01-01", dateTo: localToday(),
+      // По умолчанию — 2024 год целиком. Не «текущий год»: наблюдения в наборе
+      // заканчиваются 30 октября 2024-го, и период по сегодняшней дате не
+      // содержал бы ни одной строки — анализ падал бы с «нет строк в диапазоне»
+      // на первом же нажатии, хотя данные у поля есть.
+      dateFrom: "2024-01-01", dateTo: "2024-12-31",
       satellite: false,
+      user: null,
     };
 
     const $ = (id) => document.getElementById(id);
     const api = (path, options) => fetch("/api/v1" + path, options);
-    const isMobile = () => window.matchMedia("(max-width: 767px)").matches;
+    //: Условие дословно повторяет CSS-точку переключения раскладки. Одна
+    //: строка на оба места невозможна, поэтому она хотя бы одна и та же:
+    //: телефон в альбомной ориентации обязан остаться с накладной панелью.
+    const isMobile = () =>
+      window.matchMedia("(max-width: 767px), (max-height: 599px)").matches;
 
-    function localToday() {
-      const now = new Date();
-      const pad = (value) => String(value).padStart(2, "0");
-      return now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
-    }
     const esc = (value) => String(value === null || value === undefined ? "" : value)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+    // ============================================================ вход
+    // Личность подтверждает Braining ID кодом на почту. Здесь только два экрана —
+    // ввод адреса и ввод кода: пароля нет, восстанавливать нечего.
+    let challengeId = null;
+
+    function loginMessage(html, kind) {
+      $("login-message").innerHTML = html
+        ? '<div class="alert alert-' + (kind || "default") + '"><div>' + html + "</div></div>"
+        : "";
+    }
+
+    function showLogin(available) {
+      state.user = null;
+      $("login-card").hidden = false;
+      $("btn-logout").hidden = true;
+      // Рисование — операция над своим аккаунтом: сохранение полигона гостю
+      // вернёт 401. Показывать кнопку и ловить человека уже на сохранении, после
+      // того как он обвёл поле по точкам, — худший из возможных моментов отказа.
+      stopDrawing();
+      $("map-actions").hidden = true;
+      // Всё, что относится к полям, скрывается: у гостя своих полей нет, а чужие
+      // он видеть не должен — пустой список рядом с формой входа только путал бы.
+      for (const id of ["polygons-card", "chart-card", "anomaly-card", "provenance-card"]) {
+        const node = $(id);
+        if (node) node.hidden = true;
+      }
+      $("sheet-title-text").textContent = "Вход";
+      $("sheet-counter").hidden = true;
+      // Панель открывается сама: гость, встретивший только карту, не догадается,
+      // что где-то сбоку прячется вход — а без входа сервис для него пуст.
+      if (isMobile()) openSheet();
+      if (!available) {
+        $("login-step-email").hidden = true;
+        $("login-step-code").hidden = true;
+        loginMessage("Вход пока не настроен: у сервиса нет учётных данных " +
+          "Braining ID. Обратитесь к администратору стенда.", "warning");
+      }
+    }
+
+    function showApp(user) {
+      state.user = user;
+      $("login-card").hidden = true;
+      $("btn-logout").hidden = false;
+      $("btn-logout").title = "Выйти: " + (user.email || "аккаунт");
+      $("map-actions").hidden = false;
+      const polygonsCard = $("polygons-card");
+      if (polygonsCard) polygonsCard.hidden = false;
+      updateSheetHeader();
+    }
+
+    async function loadMe() {
+      let me;
+      try {
+        me = await (await api("/auth/me")).json();
+      } catch (error) {
+        showLogin(true);
+        loginMessage("Сервис недоступен — попробуйте обновить страницу.", "danger");
+        return false;
+      }
+      if (me.authenticated) { showApp(me); return true; }
+      showLogin(me.login_available !== false);
+      return false;
+    }
+
+    async function sendCode() {
+      const email = $("login-email").value.trim();
+      if (!email) { loginMessage("Укажите почту.", "warning"); return; }
+      $("btn-send-code").disabled = true;
+      loginMessage("Отправляю код…");
+      try {
+        const response = await api("/auth/email-code", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          loginMessage(esc(body.detail || body.message || "Не удалось отправить код."), "danger");
+          return;
+        }
+        challengeId = body.challenge_id;
+        $("login-step-email").hidden = true;
+        $("login-step-code").hidden = false;
+        loginMessage("Код отправлен на " + esc(email) + ". Письмо приходит за минуту.");
+        $("login-code").focus();
+      } finally {
+        $("btn-send-code").disabled = false;
+      }
+    }
+
+    async function verifyCode() {
+      const code = $("login-code").value.trim();
+      if (!code) { loginMessage("Введите код из письма.", "warning"); return; }
+      $("btn-verify-code").disabled = true;
+      try {
+        const response = await api("/auth/session", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ challenge_id: challengeId, code }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          loginMessage(esc(body.detail || "Код неверный или устарел."), "danger");
+          return;
+        }
+        loginMessage("");
+        showApp(body);
+        await loadReference();
+        await loadPolygons();
+      } finally {
+        $("btn-verify-code").disabled = false;
+      }
+    }
+
+    async function logout() {
+      await api("/auth/session", { method: "DELETE" }).catch(() => {});
+      // Состояние очищается полностью: оставить в памяти чужие поля после выхода
+      // значит показать их следующему, кто откроет вкладку.
+      state.polygons = []; state.selected = null; state.series = null; state.anomalies = null;
+      renderPolygons();
+      refreshMapData();
+      clearResults();
+      challengeId = null;
+      $("login-step-email").hidden = false;
+      $("login-step-code").hidden = true;
+      $("login-email").value = "";
+      $("login-code").value = "";
+      showLogin(true);
+      loginMessage("Вы вышли из аккаунта.", "success");
+    }
 
     // ---------------------------------------------------------------- состояние сервиса
     // Запрашивается первым и отдельным блоком: MapLibre тянется из внешней сети, и
@@ -711,16 +951,42 @@
       if (!isMobile()) { sheet.style.transform = ""; return; }
       setSheet("closed");
 
-      let startX = 0, startY = 0, dragging = false, moved = 0, startedAt = 0, opening = false;
+      let startX = 0, startY = 0, dragging = false, moved = 0, startedAt = 0;
+      let opening = false, fromHint = false, lastX = 0;
+
+      // Карта тянется тем же пальцем и уезжала вместе с жестом панели. MapLibre
+      // слушает свои touch-события, и наш preventDefault на pointermove их не
+      // отменяет, — поэтому на время жеста перетаскивание карты выключается её
+      // собственным средством.
+      const mapDrag = (enabled) => {
+        if (!state.map || !state.map.dragPan) return;
+        try { enabled ? state.map.dragPan.enable() : state.map.dragPan.disable(); }
+        catch (error) { /* карта могла не подняться — жест панели от неё не зависит */ }
+      };
 
       const begin = (event) => {
         const width = window.innerWidth;
-        const fromEdge = state.sheet === "closed" && event.clientX >= width - EDGE_ZONE;
+        // Язычок — такая же точка старта, как и сама кромка: он нарисован как
+        // приглашение потянуть, и попасть пальцем в 28 пикселей края мимо него
+        // никто не обязан.
+        const onHint = Boolean(event.target.closest && event.target.closest("#edge-hint"));
+        const fromEdge = state.sheet === "closed" &&
+          (onHint || event.clientX >= width - EDGE_ZONE);
         const insideOpen = state.sheet === "open" && sheet.contains(event.target);
         if (!fromEdge && !insideOpen) return;
-        dragging = true; opening = fromEdge; moved = 0; startedAt = Date.now();
-        startX = event.clientX; startY = event.clientY;
+        dragging = true; opening = fromEdge; fromHint = onHint;
+        moved = 0; startedAt = Date.now();
+        startX = lastX = event.clientX; startY = event.clientY;
         sheet.dataset.dragging = "true";
+        if (fromEdge) {
+          mapDrag(false);
+          // Захват указателя: без него браузер отбирает жест, как только палец
+          // уходит с язычка на карту, и присылает pointercancel после первого же
+          // движения. Внутри открытой панели не захватываем — там живут поля
+          // ввода и список, которым события нужны себе.
+          try { event.target.setPointerCapture(event.pointerId); }
+          catch (error) { /* мышь и старые указатели захват не поддерживают */ }
+        }
       };
 
       const move = (event) => {
@@ -730,7 +996,8 @@
         // Вертикальное движение отдаётся содержимому: иначе прокрутка списка
         // внутри открытой панели превращалась бы в попытку её закрыть.
         if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 12) { dragging = false;
-          sheet.dataset.dragging = "false"; return; }
+          sheet.dataset.dragging = "false"; mapDrag(true); return; }
+        lastX = event.clientX;
         moved = Math.abs(dx);
         const width = sheetWidth();
         // Открываем: панель идёт следом за пальцем от 100% к 0. Закрываем: наоборот.
@@ -744,14 +1011,27 @@
         if (!dragging) return;
         dragging = false;
         sheet.dataset.dragging = "false";
-        const dx = event.clientX - startX;
+        mapDrag(true);
+        // Координата берётся из последнего движения, а не из завершающего события:
+        // pointercancel приходит с нулевыми clientX/clientY, и решение по нему
+        // получалось случайным — один и тот же жест то открывал панель, то нет.
+        if (event.type === "pointerup" && event.clientX) lastX = event.clientX;
+        const dx = lastX - startX;
         const width = sheetWidth();
         const speed = moved / Math.max(1, Date.now() - startedAt);
         // Быстрый короткий свайп — намерение, а не промах: он срабатывает даже
         // когда палец прошёл заметно меньше трети ширины.
         const decisive = speed > 0.5;
-        if (opening) setSheet(decisive || -dx > width * OPEN_THRESHOLD ? "open" : "closed");
-        else setSheet(decisive || dx > width * OPEN_THRESHOLD ? "closed" : "open");
+        if (opening) {
+          // Жест, начатый на язычке, заканчивается открытием — язычок ровно для
+          // этого и нарисован, и результат обязан совпадать с нажатием «Поля».
+          // Передумать можно, вернув палец вправо, к кромке.
+          const pulled = -dx > width * OPEN_THRESHOLD || (decisive && dx < 0) ||
+            (fromHint && dx <= 0);
+          setSheet(pulled ? "open" : "closed");
+        } else {
+          setSheet(decisive || dx > width * OPEN_THRESHOLD ? "closed" : "open");
+        }
       };
 
       document.addEventListener("pointerdown", begin, { passive: true });
@@ -1438,12 +1718,15 @@
           new Date(series.data_retrieved_at).toLocaleString("ru-RU") + "</td></tr>";
       }
       html += "</table>";
-      // Ограничение модели проговаривается в интерфейсе, а не только в README:
-      // владелец C-04 предупреждает, что на переносе в будущий сезон ансамбль
-      // уступает простому baseline, и умолчать об этом на демо нельзя.
-      html += '<div class="alert alert-warning"><div>Перенос на будущий сезон — слабое ' +
-        "место модели: на временном режиме проверки ансамбль уступает простому baseline. " +
-        "Для дат за пределами обучающего периода результат считайте ориентировочным.</div></div>";
+      // Ограничение модели проговаривается в интерфейсе, а не только в README.
+      // Формулировка описывает работающую модель (смесь LightGBM и спутниковых
+      // экспертов из model/), а не прежний бандл: скрытые ответы организаторов
+      // нам недоступны, поэтому качество измерено только локально.
+      html += '<div class="alert alert-warning"><div>Качество измерено локально: ' +
+        "RMSE 0.0543 на development и 0.0561 на audit против 0.0918 у полусуммы " +
+        "соседей. Скрытые ответы организаторов недоступны, официальный балл не " +
+        "измерялся — оценка локальная. Проверка шла на 20 полигонах нового test, " +
+        "независимых регионов в наборе нет.</div></div>";
       $("provenance-body").innerHTML = html;
     }
 
@@ -1517,6 +1800,19 @@
       }, 150);
     });
 
+    $("btn-send-code").onclick = sendCode;
+    $("btn-verify-code").onclick = verifyCode;
+    $("btn-login-back").onclick = () => {
+      $("login-step-email").hidden = false;
+      $("login-step-code").hidden = true;
+      loginMessage("");
+    };
+    $("btn-logout").onclick = logout;
+    // Enter в поле — привычный способ отправить форму: без него на телефоне
+    // приходится сворачивать клавиатуру, чтобы дотянуться до кнопки.
+    $("login-email").addEventListener("keydown", (e) => { if (e.key === "Enter") sendCode(); });
+    $("login-code").addEventListener("keydown", (e) => { if (e.key === "Enter") verifyCode(); });
+
     renderHealth();
     setInterval(renderHealth, 15000);
     initSheet();
@@ -1534,13 +1830,20 @@
         if (state.polygons.some((item) => item.id === id)) select(id);
       } else if (hash === "#menu") {
         openSheet();
-      } else {
+      } else if (state.user) {
+        // Панель закрывается только у вошедшего: гостю она показывает форму
+        // входа, и захлопнуть её значит оставить человека наедине с картой,
+        // на которой ему нечего делать.
         closeSheet();
       }
     }
     window.addEventListener("hashchange", applyHash);
     initMap();
-    loadReference().then(loadPolygons).then(applyHash);
+    // Данные грузятся только после того, как выяснилось, кто перед нами:
+    // запрос списка полей у гостя вернул бы 401 и мигнул бы ошибкой на старте.
+    // Ссылки при этом обрабатываются в любом случае — гостю тоже нужно уметь
+    // открыть панель по #menu, там его ждёт форма входа.
+    loadMe().then((ok) => (ok ? loadReference().then(loadPolygons) : null)).then(applyHash);
   })();
   </script>
 </body>

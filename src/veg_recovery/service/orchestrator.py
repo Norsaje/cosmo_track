@@ -104,6 +104,16 @@ def run_reconstruction(
         for row in result.diagnostics.to_dict("records"):
             diagnostics[pd.Timestamp(row["date"]).normalize()] = row
 
+        # Модель строит признаки из своего набора и точку вне него восстановить не
+        # может. Молча вернуть на графике разрыв — значит выдать пробел за отсутствие
+        # данных, хотя причина другая и она известна.
+        unresolved = int(mask.sum()) - len(predictions)
+        if unresolved > 0:
+            warnings.append(
+                f"POINTS_OUTSIDE_MODEL_DATASET: {unresolved} из {int(mask.sum())} "
+                "пропусков не восстановлены — этих точек нет в наборе модели"
+            )
+
     # Климатология берётся из отдельного кадра: в кадр модели она не входит
     # намеренно, но графику нужна. Индексируется по дате, а не по позиции —
     # контекст может прийти в другом порядке или с иным набором строк.

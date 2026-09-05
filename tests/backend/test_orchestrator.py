@@ -18,7 +18,9 @@ from veg_recovery.service import ModelStub, build_reconstructor
 from veg_recovery.service.orchestrator import build_gap_mask, run_reconstruction
 
 ROOT = Path(__file__).resolve().parents[2]
-BUNDLE = ROOT / "artifacts/ml/ndvi_backend_handoff_v1/bundle"
+#: Поставка модели (BE-011R). Прежний bundle C-04 оркестратор больше не зовёт.
+MODEL = ROOT / "model"
+MODEL_DATA = MODEL / "data"
 
 pytestmark = pytest.mark.skipif(
     not (ROOT / "src/veg_recovery/contracts.py").is_file(),
@@ -119,26 +121,55 @@ def test_diagnostics_keep_null_instead_of_zero() -> None:
     assert point.diagnostics["right_distance_days"] == 1.0
 
 
-@pytest.mark.skipif(not (BUNDLE / "manifest.json").is_file(), reason="нет bundle C-04")
+model_available = pytest.mark.skipif(
+    not (MODEL / "runs/local/artifacts/model_bundle.pkl").is_file(),
+    reason="нет поставки модели в model/",
+)
+
+
+@model_available
 def test_real_model_fills_the_series() -> None:
-    """Тот же оркестратор с настоящей обученной моделью."""
-    frame = _frame(list(np.where(np.arange(11) == 5, np.nan, np.linspace(0.3, 0.6, 11))))
-    outcome = run_reconstruction(frame, build_reconstructor(BUNDLE, trusted=True))
-    assert outcome.model_version == "p0-catboost-gpu-v1"
-    assert outcome.reconstructed_count == 1
+    """Тот же оркестратор с настоящей обученной моделью из `model/`.
+
+    Ряд берётся из набора поставки, а не выдумывается: признаки строятся из
+    контекста всего набора, и синтетический полигон модель восстановить не может
+    в принципе — ей неоткуда взять ни сезонную норму, ни доноров.
+    """
+    from veg_recovery.providers.fixture import load_series
+
+    series = load_series("AOI-0005", date(2024, 4, 1), date(2024, 6, 30), data_dir=MODEL_DATA)
+    outcome = run_reconstruction(
+        series.frame, build_reconstructor(MODEL, trusted=True), context=series.context
+    )
+    assert outcome.model_version.startswith("ndvi-blend-")
+    assert outcome.reconstructed_count > 0
     assert not any(w.startswith("MODEL_STUB_USED") for w in outcome.warnings)
     point = next(p for p in outcome.points if p.is_reconstructed)
     assert point.method != "mean_neighbors"
     assert point.ndvi_harmonized is not None
+    assert point.lower < point.primary_ndvi_reconstructed < point.upper
+
+
+@model_available
+def test_points_outside_the_model_dataset_are_reported_not_invented() -> None:
+    """Полигон, которого нет в наборе модели, не восстанавливается молча.
+
+    Разрыв на графике без объяснения читается как «данных не было», хотя причина
+    другая и она известна: точки нет в наборе, на котором обучалась модель.
+    """
+    frame = _frame(list(np.where(np.arange(11) == 5, np.nan, np.linspace(0.3, 0.6, 11))))
+    outcome = run_reconstruction(frame, build_reconstructor(MODEL, trusted=True))
+    assert outcome.reconstructed_count == 0
+    assert any(w.startswith("POINTS_OUTSIDE_MODEL_DATASET") for w in outcome.warnings)
 
 
 # --------------------------------------------------------------- offline-источник
 
 
-DATA_DIR = ROOT / "data"
+DATA_DIR = MODEL_DATA
 
 fixture_available = pytest.mark.skipif(
-    not (DATA_DIR / "train_dataset.csv").is_file(), reason="нет конкурсных CSV"
+    not (DATA_DIR / "train.csv").is_file(), reason="нет набора поставки"
 )
 
 

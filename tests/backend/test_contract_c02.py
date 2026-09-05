@@ -42,6 +42,7 @@ from veg_recovery.service import (
     ModelUnavailable,
     build_reconstructor,
     classify_bundle_failure,
+    load_ml_bundle,
 )
 from veg_recovery.service.reconstructor import neighbour_context
 
@@ -129,19 +130,34 @@ def test_stub_is_refused_in_production() -> None:
     assert "trained bundle" not in str(excinfo.value)
 
 
-def test_broken_bundle_never_degrades_to_the_stub(tmp_path) -> None:
-    """Заглушка заменяет отсутствующий bundle и никогда — сломанный.
+def test_broken_model_never_degrades_to_the_stub(tmp_path) -> None:
+    """Заглушка заменяет отсутствующую модель и никогда — сломанную.
 
     Молчаливый переход на заглушку при испорченной модели — это выдача заглушки
     за модель, ровно то, что запрещает инвариант 10 и red-team-проверка.
     """
-    broken = tmp_path / "bundle"
-    broken.mkdir()
-    (broken / "manifest.json").write_text('{"schema_version": "0.0"}', encoding="utf-8")
-    # Без кода Разработчика 1 сюда прилетает ModelContractMissing, с ним —
-    # ModelUnavailable("schema"). Важно ровно одно: не тихий возврат заглушки.
+    broken = tmp_path / "model"
+    (broken / "runs/local/artifacts").mkdir(parents=True)
+    (broken / "runs/local/artifacts/model_bundle.pkl").write_bytes(b"not a pickle")
+    # Каталог на месте, файл смеси на месте, содержимое мусорное. Важно ровно
+    # одно: не тихий возврат заглушки.
     with pytest.raises((ModelUnavailable, ModelContractMissing)):
-        build_reconstructor(broken, allow_stub=True)
+        build_reconstructor(broken, allow_stub=True, trusted=True)
+
+
+def test_untrusted_model_is_refused_before_the_pickle_is_read(tmp_path) -> None:
+    """Pickle исполняет код при загрузке, поэтому доверие требуется до чтения.
+
+    Отказ обязан наступить раньше, чем файл откроют: иначе «недоверенный» бандл
+    успевает выполнить свой `__reduce__` ровно в тот момент, когда мы решили ему
+    не доверять.
+    """
+    package = tmp_path / "model"
+    (package / "runs/local/artifacts").mkdir(parents=True)
+    (package / "runs/local/artifacts/model_bundle.pkl").write_bytes(b"not a pickle")
+    with pytest.raises(ModelUnavailable) as excinfo:
+        build_reconstructor(package, allow_stub=True, trusted=False)
+    assert excinfo.value.kind == "untrusted"
 
 
 def test_mean_of_two_neighbours() -> None:
@@ -316,7 +332,7 @@ def test_stub_and_real_bundle_agree_on_the_baseline(contracts) -> None:
         pytest.skip("нет baseline-бандла Разработчика 1")
     frame = _frame()
     mask = _mask(frame)
-    handle = build_reconstructor(bundle)
+    handle = load_ml_bundle(bundle)
     assert handle.is_stub is False
     real = handle.predict(contracts.ReconstructionRequest(frame, mask, "web"))
     stub = ModelStub().predict(contracts.ReconstructionRequest(frame, mask, "web"))

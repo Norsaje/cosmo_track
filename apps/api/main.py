@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 # и обработчик, повешенный на fastapi.HTTPException, до неё не доберётся.
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from apps.api.routes import analyses, health, jobs, polygons
+from apps.api.routes import analyses, auth, health, jobs, polygons
 from apps.api.schemas import CONTRACT_ID, CONTRACT_VERSION, ErrorResponse
 from apps.api.settings import get_settings
 
@@ -164,6 +164,7 @@ async def validation_exception_handler(
 # Health-роуты живут вне версионного префикса: их дёргают healthcheck-и Compose
 # и smoke-тесты, и версия API их менять не должна.
 app.include_router(health.router)
+app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(polygons.router, prefix=settings.api_prefix)
 app.include_router(jobs.router, prefix=settings.api_prefix)
 app.include_router(analyses.router, prefix=settings.api_prefix)

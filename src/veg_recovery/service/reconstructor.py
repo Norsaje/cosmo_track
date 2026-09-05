@@ -281,44 +281,75 @@ def load_bundle_reconstructor(bundle_path: str | Path, *, trusted: bool = False)
         raise ModelUnavailable(classify_bundle_failure(exc), str(exc)) from exc
 
 
+def load_ml_bundle(bundle_path: str | Path, *, trusted: bool = False) -> LoadedReconstructor:
+    """Прежний бандл Разработчика 1 (C-03 baseline_v1 или C-04 p0-catboost-gpu-v1).
+
+    Веб-путь его больше не зовёт: с BE-011R модель приходит из каталога `model/`.
+    Функция остаётся точкой, которой contract-тесты подтверждают, что принятый
+    handoff H-003 по-прежнему загружается нашим кодом. В `build_reconstructor`
+    она не участвует намеренно — двух моделей в горячем пути быть не должно.
+    """
+    reconstructor = load_bundle_reconstructor(bundle_path, trusted=trusted)
+    return LoadedReconstructor(
+        reconstructor=reconstructor,
+        model_version=reconstructor.bundle.manifest.model_version,
+        is_stub=False,
+        bundle_path=str(bundle_path),
+    )
+
+
 def build_reconstructor(
-    bundle_path: str | Path | None,
+    package_path: str | Path | None,
     *,
+    run_name: str = "local",
     allow_stub: bool = True,
     trusted: bool = False,
     environment: str = "development",
 ) -> LoadedReconstructor:
     """Собрать предсказатель для процесса. Вызывается один раз на старте.
 
-    Загрузка на старте — требование владельца контракта («Load a bundle once at process
-    startup», `artifacts/ml/CONTRACT_CHANGELOG.md`), а не наша оптимизация: читать бандл
-    на каждый запрос значит проверять SHA256 мегабайтов внутри обработки HTTP.
+    С BE-011R это пакет из каталога `model/`: смесь LightGBM и спутниковых
+    экспертов CatBoost на 324 признаках. Прежний бандл C-04 остаётся в дереве
+    как принятый handoff H-003, но веб-путь его больше не зовёт — двух моделей
+    в сервисе быть не должно (инвариант 6).
 
-    Правило подмены ровно одно: заглушка заменяет **отсутствующий** бандл и никогда —
-    сломанный. Битый бандл, не совпавший хеш или недоверенный joblib обязаны валить
-    старт. Молча съехать на заглушку при сломанной модели — это выдать заглушку
-    за модель, ровно тот обман, который запрещает red-team-проверка перед CP-3.
+    Загрузка на старте — не оптимизация: `read_data` сверяет SHA256 обоих CSV
+    поставки и разбирает 149 145 строк, а pickle смеси весит 17 МБ. Делать это
+    внутри обработки HTTP значит платить секунду на каждом запросе.
+
+    Правило подмены ровно одно: заглушка заменяет **отсутствующую** поставку и
+    никогда — сломанную. Битые файлы, не совпавший хеш и недоверенный pickle
+    обязаны валить старт. Молча съехать на заглушку при сломанной модели — это
+    выдать заглушку за модель, ровно тот обман, который запрещает
+    red-team-проверка перед CP-3.
     """
     if environment == "production" and allow_stub:
         # Отдельная проверка до всякой загрузки: конфигурация, разрешающая стаб
-        # в проде, ошибочна сама по себе, даже если бандл сейчас на месте.
+        # в проде, ошибочна сама по себе, даже если модель сейчас на месте.
         raise ModelUnavailable(
             "stub_forbidden",
-            "выключите COSMO_ALLOW_MODEL_STUB или смонтируйте реальный bundle "
+            "выключите COSMO_ALLOW_MODEL_STUB или смонтируйте реальную модель "
             "(red-team checklist перед CP-3)",
         )
 
-    if bundle_path:
-        reconstructor = load_bundle_reconstructor(bundle_path, trusted=trusted)
+    if package_path:
+        # Путь задан — значит модель обязана загрузиться. Пустой каталог на этом
+        # месте (Docker создаёт его сам, если host-пути нет) обязан валить старт,
+        # а не тихо превращаться в заглушку.
+        # Импорт ленивый: пакет поставки лежит вне нашего дерева, и модуль
+        # `veg_recovery.service` обязан импортироваться без него (SH-005).
+        from veg_recovery.service.ndvi_run import NdviRunReconstructor
+
+        reconstructor = NdviRunReconstructor(package_path, run_name, trusted=trusted)
         return LoadedReconstructor(
             reconstructor=reconstructor,
-            model_version=reconstructor.bundle.manifest.model_version,
+            model_version=reconstructor.model_version,
             is_stub=False,
-            bundle_path=str(bundle_path),
+            bundle_path=str(Path(package_path) / "runs" / run_name),
         )
 
     if not allow_stub:
-        raise ModelUnavailable("missing", "путь к model bundle не задан")
+        raise ModelUnavailable("missing", "каталог модели не смонтирован")
     return LoadedReconstructor(
         reconstructor=ModelStub(), model_version=STUB_MODEL_VERSION, is_stub=True
     )

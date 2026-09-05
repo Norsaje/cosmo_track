@@ -14,6 +14,8 @@ from apps.db.models import (
     Polygon,
     Provenance,
     Reconstruction,
+    Session,
+    User,
 )
 
 __all__ = [
@@ -25,6 +27,8 @@ __all__ = [
     "Polygon",
     "Provenance",
     "Reconstruction",
+    "Session",
+    "User",
     "get_engine",
     "get_session_factory",
     "session_scope",

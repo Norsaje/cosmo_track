@@ -13,7 +13,7 @@ from geoalchemy2.shape import from_shape, to_shape
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from apps.api.deps import get_db
+from apps.api.deps import get_db, require_user
 from apps.api.schemas import (
     ErrorResponse,
     FieldSearchRequest,
@@ -26,12 +26,14 @@ from apps.api.schemas import (
     ReferenceSeries,
     ReferenceSeriesList,
 )
-from apps.db.models import Polygon
+from apps.api.settings import get_settings
+from apps.db.models import Polygon, User
 from veg_recovery.geospatial.geometry import GeometryError, normalize
 
 #: Единый конверт ошибки объявляется в OpenAPI, иначе сгенерированный клиент
 #: не узнает про error_code и будет читать несуществующее поле detail.
 ERRORS = {
+    401: {"model": ErrorResponse, "description": "Нужен вход"},
     404: {"model": ErrorResponse, "description": "Объект не найден"},
     422: {"model": ErrorResponse, "description": "Некорректное тело запроса"},
     501: {"model": ErrorResponse, "description": "Ещё не реализовано"},
@@ -80,6 +82,7 @@ def _to_out(row: Polygon) -> PolygonOut:
 @router.get("/polygons", response_model=PolygonList)
 async def list_polygons(
     db: Session = Depends(get_db),
+    user: User = Depends(require_user),
     bbox: str | None = Query(default=None, description="minx,miny,maxx,maxy в EPSG:4326"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -90,8 +93,10 @@ async def list_polygons(
     вычитыванием всех строк в Python: иначе демо на нескольких тысячах полей
     начнёт тянуть всю таблицу на каждый сдвиг карты.
     """
-    statement = select(Polygon)
-    counter = select(func.count()).select_from(Polygon)
+    # Выборка сразу ограничена владельцем. Фильтровать после — значит однажды
+    # забыть про новый роут и показать чужие поля.
+    statement = select(Polygon).where(Polygon.user_id == user.id)
+    counter = select(func.count()).select_from(Polygon).where(Polygon.user_id == user.id)
     if bbox is not None:
         minx, miny, maxx, maxy = _parse_bbox(bbox)
         envelope = func.ST_MakeEnvelope(minx, miny, maxx, maxy, 4326)
@@ -103,7 +108,11 @@ async def list_polygons(
 
 
 @router.post("/polygons", response_model=PolygonOut, status_code=status.HTTP_201_CREATED)
-async def create_polygon(payload: PolygonCreate, db: Session = Depends(get_db)) -> PolygonOut:
+async def create_polygon(
+    payload: PolygonCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> PolygonOut:
     """Создать контур.
 
     Геометрия проверяется до записи: тип, диапазон координат, antimeridian, число
@@ -136,6 +145,7 @@ async def create_polygon(payload: PolygonCreate, db: Session = Depends(get_db)) 
         # Конкурсный идентификатор приходит через properties: он нужен offline-пути
         # BE-008, чтобы найти ряд полигона в data/*.csv, но в C-07 отдельного поля нет.
         anon_polygon_id=(payload.properties or {}).get("anon_polygon_id"),
+        user_id=user.id,
     )
     db.add(row)
     db.flush()
@@ -144,18 +154,28 @@ async def create_polygon(payload: PolygonCreate, db: Session = Depends(get_db)) 
 
 
 @router.get("/polygons/{polygon_id}", response_model=PolygonOut)
-async def get_polygon(polygon_id: str, db: Session = Depends(get_db)) -> PolygonOut:
+async def get_polygon(
+    polygon_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> PolygonOut:
     row = db.get(Polygon, polygon_id)
-    if row is None:
+    # Чужой полигон отдаёт 404, а не 403: 403 подтвердил бы, что объект с таким
+    # идентификатором существует, и превратил бы роут в способ их перебирать.
+    if row is None or row.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="полигон не найден")
     return _to_out(row)
 
 
 @router.delete("/polygons/{polygon_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_polygon(polygon_id: str, db: Session = Depends(get_db)) -> None:
+async def delete_polygon(
+    polygon_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> None:
     """Удалить контур вместе с его анализами (каскад в схеме)."""
     row = db.get(Polygon, polygon_id)
-    if row is None:
+    if row is None or row.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="полигон не найден")
     db.delete(row)
 
@@ -183,7 +203,9 @@ async def list_reference_polygons() -> ReferenceSeriesList:
     from veg_recovery.providers.fixture import list_available_series
 
     try:
-        series = list_available_series("data")
+        # Каталог берётся из настроек, а не строкой: ряды обязаны быть теми же,
+        # что видит модель, иначе выбранный полигон окажется вне её контекста.
+        series = list_available_series(get_settings().model_data_dir)
     except (OSError, ValueError):
         # Отсутствие CSV — не отказ сервиса: пустой список честнее ошибки, а
         # интерфейс сам объяснит, что источников данных нет.

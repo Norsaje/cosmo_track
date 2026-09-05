@@ -15,7 +15,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from apps.api.deps import get_db
+from apps.api.deps import get_db, require_user
 from apps.api.schemas import (
     AnalysisAccepted,
     AnalysisCreate,
@@ -30,10 +30,19 @@ from apps.api.schemas import (
 )
 from apps.api.schemas.jobs import JobState
 from apps.api.settings import get_settings
-from apps.db.models import Analysis, AnalysisJob, AnomalyEvent, Polygon, Provenance, Reconstruction
+from apps.db.models import (
+    Analysis,
+    AnalysisJob,
+    AnomalyEvent,
+    Polygon,
+    Provenance,
+    Reconstruction,
+    User,
+)
 
 #: Единый конверт ошибки C-07 в OpenAPI (см. комментарий в routes/polygons.py).
 ERRORS = {
+    401: {"model": ErrorResponse, "description": "Нужен вход"},
     404: {"model": ErrorResponse, "description": "Объект не найден"},
     422: {"model": ErrorResponse, "description": "Некорректное тело запроса"},
     501: {"model": ErrorResponse, "description": "Ещё не реализовано"},
@@ -42,9 +51,18 @@ ERRORS = {
 router = APIRouter(tags=["analyses"], responses=ERRORS)
 
 
-def _get_analysis(db: Session, analysis_id: str) -> Analysis:
+def _get_analysis(db: Session, analysis_id: str, user: User) -> Analysis:
+    """Анализ владельца или 404.
+
+    Владение проверяется через полигон: у анализа своего владельца нет, и
+    единственный способ не перепутать — спрашивать у поля, чьё оно.
+    Чужой анализ отдаёт 404, а не 403: 403 подтвердил бы его существование.
+    """
     analysis = db.get(Analysis, analysis_id)
     if analysis is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="анализ не найден")
+    polygon = db.get(Polygon, analysis.polygon_id)
+    if polygon is None or polygon.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="анализ не найден")
     return analysis
 
@@ -73,7 +91,10 @@ def _analysis_out(analysis: Analysis) -> AnalysisOut:
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def create_analysis(
-    payload: AnalysisCreate, response: Response, db: Session = Depends(get_db)
+    payload: AnalysisCreate,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
 ) -> AnalysisAccepted:
     """Поставить анализ в очередь. Отвечает 202 и не считает ничего синхронно.
 
@@ -83,7 +104,7 @@ async def create_analysis(
     `polygon_id`: два одинаковых контура — это один и тот же анализ.
     """
     polygon = db.get(Polygon, payload.polygon_id)
-    if polygon is None:
+    if polygon is None or polygon.user_id != user.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="полигон не найден")
 
     # Ранняя проверка источника данных. Раньше полигон без привязки к ряду
@@ -151,19 +172,27 @@ async def create_analysis(
 
 
 @router.get("/analyses/{analysis_id}", response_model=AnalysisOut)
-async def get_analysis(analysis_id: str, db: Session = Depends(get_db)) -> AnalysisOut:
-    return _analysis_out(_get_analysis(db, analysis_id))
+async def get_analysis(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> AnalysisOut:
+    return _analysis_out(_get_analysis(db, analysis_id, user))
 
 
 @router.get("/analyses/{analysis_id}/series", response_model=SeriesResponse)
-async def get_series(analysis_id: str, db: Session = Depends(get_db)) -> SeriesResponse:
+async def get_series(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> SeriesResponse:
     """Итоговый ряд для графика.
 
     `primary_ndvi` и `ndvi_harmonized` отдаются раздельно (решение D-003): сырой
     конкурсный ряд и продуктовый гармонизированный — разные величины, и склеивать
     их в одну линию запрещено отдельным пунктом red-team checklist.
     """
-    analysis = _get_analysis(db, analysis_id)
+    analysis = _get_analysis(db, analysis_id, user)
     rows = db.execute(
         select(Reconstruction)
         .where(Reconstruction.analysis_id == analysis_id)
@@ -198,14 +227,18 @@ async def get_series(analysis_id: str, db: Session = Depends(get_db)) -> SeriesR
 
 
 @router.get("/analyses/{analysis_id}/anomalies", response_model=AnomaliesResponse)
-async def get_anomalies(analysis_id: str, db: Session = Depends(get_db)) -> AnomaliesResponse:
+async def get_anomalies(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> AnomaliesResponse:
     """События аномалий.
 
     Пустой `items` — валидный результат «событий не найдено», но он **не** равен
     «поле в норме»: при нехватке истории детектор возвращает предупреждение,
     и потребитель обязан различать эти два состояния.
     """
-    _get_analysis(db, analysis_id)
+    _get_analysis(db, analysis_id, user)
     rows = db.execute(
         select(AnomalyEvent)
         .where(AnomalyEvent.analysis_id == analysis_id)
@@ -250,8 +283,12 @@ async def get_anomalies(analysis_id: str, db: Session = Depends(get_db)) -> Anom
 
 
 @router.get("/analyses/{analysis_id}/provenance", response_model=ProvenanceResponse)
-async def get_provenance(analysis_id: str, db: Session = Depends(get_db)) -> ProvenanceResponse:
-    _get_analysis(db, analysis_id)
+async def get_provenance(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> ProvenanceResponse:
+    _get_analysis(db, analysis_id, user)
     rows = db.execute(
         select(Provenance).where(Provenance.analysis_id == analysis_id)
     ).scalars()
@@ -281,14 +318,18 @@ async def get_provenance(analysis_id: str, db: Session = Depends(get_db)) -> Pro
     # text/plain, и сгенерированный клиент решил бы, что это не таблица.
     responses={200: {"content": {"text/csv": {"schema": {"type": "string"}}}}},
 )
-async def export_csv(analysis_id: str, db: Session = Depends(get_db)) -> PlainTextResponse:
+async def export_csv(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_user),
+) -> PlainTextResponse:
     """Выгрузка ряда.
 
     Колонки raw и harmonized разнесены явно, а `is_observed`/`is_reconstructed`
     едут вместе со значениями: без них выгрузка не отличает наблюдение от
     восстановления, и результат легко принять за измерение.
     """
-    _get_analysis(db, analysis_id)
+    _get_analysis(db, analysis_id, user)
     rows = db.execute(
         select(Reconstruction)
         .where(Reconstruction.analysis_id == analysis_id)

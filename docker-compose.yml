@@ -56,11 +56,14 @@ services:
     environment:
       COSMO_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cosmo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cosmo}
       COSMO_REDIS_URL: redis://redis:6379/0
-      COSMO_MODEL_BUNDLE_PATH: /srv/model_bundle
+      COSMO_MODEL_PACKAGE_PATH: /srv/model
+      COSMO_MODEL_DATA_DIR: /srv/model/data
     volumes:
-      # Bundle от Разработчика 1 монтируется только на чтение. Путь задаётся переменной:
-      # каталог artifacts/ml/ — зона ML, и создавать его у себя мы не должны.
-      - ${MODEL_BUNDLE_HOST_PATH:-./infra/model_bundle}:/srv/model_bundle:ro
+      # Поставка модели монтируется как есть и только на чтение. Копировать её в
+      # образ нельзя: пакет самодостаточен и хеширован (PACKAGE_MANIFEST.json), а
+      # `ndvi.data.read_data` сверяет SHA256 обоих CSV при каждом старте — копия
+      # рассинхронизировалась бы с этими хешами.
+      - ${MODEL_PACKAGE_HOST_PATH:-./model}:/srv/model:ro
       # Конкурсные CSV монтируются, а не копируются в образ: это 156 МБ, которые
       # не меняются никогда, и класть их в каждый слой образа бессмысленно.
       # Только чтение — data/*.csv неизменяемы по правилам проекта.
@@ -103,9 +106,10 @@ services:
     environment:
       COSMO_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cosmo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cosmo}
       COSMO_REDIS_URL: redis://redis:6379/0
-      COSMO_MODEL_BUNDLE_PATH: /srv/model_bundle
+      COSMO_MODEL_PACKAGE_PATH: /srv/model
+      COSMO_MODEL_DATA_DIR: /srv/model/data
     volumes:
-      - ${MODEL_BUNDLE_HOST_PATH:-./infra/model_bundle}:/srv/model_bundle:ro
+      - ${MODEL_PACKAGE_HOST_PATH:-./model}:/srv/model:ro
       # Конкурсные CSV монтируются, а не копируются в образ: это 156 МБ, которые
       # не меняются никогда, и класть их в каждый слой образа бессмысленно.
       # Только чтение — data/*.csv неизменяемы по правилам проекта.

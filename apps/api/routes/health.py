@@ -18,25 +18,28 @@ from apps.api.settings import get_settings
 
 router = APIRouter(tags=["health"])
 
-#: Файл, по которому определяем, что смонтирован настоящий bundle, а не пустой каталог.
-#: Именно manifest несёт schema_version — единственный критерий отказа по инварианту 6.
-BUNDLE_MANIFEST = "manifest.json"
+#: Файлы, без которых поставка модели не работает: обученная смесь и оба CSV набора,
+#: по которым строится контекст признаков. Проверяются все три — модель без своего
+#: набора не восстановит ни одной точки, хотя pickle на месте.
+RUN_BUNDLE = "artifacts/model_bundle.pkl"
+DATASET_FILES = ("data/train.csv", "data/test_features.csv")
 
 
-def _bundle_status(bundle_path: str) -> ComponentStatus:
-    """Статус model bundle.
+def _model_status(package_path: str, run_name: str) -> ComponentStatus:
+    """Статус поставленной модели.
 
-    Проверять `isdir` нельзя: `docker-compose.yml` монтирует `./artifacts/ml/final_bundle`,
-    и Docker сам создаёт этот путь пустым каталогом, если его нет. Тогда `isdir` вернул бы
-    True и health отрапортовал бы готовность модели при полном её отсутствии — ровно та
+    Проверять `isdir` нельзя: `docker-compose.yml` монтирует каталог модели, и Docker
+    сам создаёт этот путь пустым, если его нет на хосте. Тогда `isdir` вернул бы True
+    и health отрапортовал бы готовность модели при полном её отсутствии — ровно та
     ложь, которую запрещает red-team-пункт перед CP-3.
     """
-    root = Path(bundle_path)
+    root = Path(package_path)
     if not root.is_dir():
         return ComponentStatus.NOT_CONFIGURED
-    if not (root / BUNDLE_MANIFEST).is_file():
-        # Каталог есть, манифеста нет — это не «готово» и не «не настроено»,
-        # а именно деградация: смонтировали пустой или неполный bundle.
+    required = [root / "runs" / run_name / RUN_BUNDLE, *(root / name for name in DATASET_FILES)]
+    if not all(path.is_file() for path in required):
+        # Каталог есть, файлов нет — это не «готово» и не «не настроено»,
+        # а именно деградация: смонтировали пустую или неполную поставку.
         return ComponentStatus.DEGRADED
     return ComponentStatus.OK
 
@@ -117,7 +120,7 @@ async def ready() -> ReadyResponse:
     settings = get_settings()
     database = _database_status(settings.database_url)
     redis_status = _redis_status(settings.redis_url)
-    bundle = _bundle_status(settings.model_bundle_path)
+    bundle = _model_status(settings.model_package_path, settings.model_run_name)
 
     components = (database, redis_status, bundle)
     if all(component is ComponentStatus.OK for component in components):
