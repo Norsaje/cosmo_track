@@ -1,0 +1,61 @@
+{
+  "created_by_script_version": "1.0.0",
+  "design_assumptions": [
+    "Берём ровно 1 known polygon (первый по алфавиту в train ∩ test).",
+    "Берём ровно 1 unseen polygon (первый по алфавиту в test \\ train).",
+    "Gap run длиной [2,4] ищем в реальных данных; если не нашли — synthetic TOY-RUN-A.",
+    "One-sided context: synthetic TOY-CTX-A (только S2 present).",
+    "Submission valid = только gap-строки test_tiny с prediction=0.5.",
+    "Submission invalid duplicate = submission valid + 1 дубликат первой строки."
+  ],
+  "design_assumptions_requires_ml_confirmation": true,
+  "files": {
+    "submission_for_test_tiny.csv": {
+      "columns": 3,
+      "rows": 5
+    },
+    "submission_invalid_duplicate.csv": {
+      "columns": 3,
+      "rows": 6
+    },
+    "test_tiny.csv": {
+      "columns": 20,
+      "gaps": 5,
+      "rows": 125
+    },
+    "train_tiny.csv": {
+      "columns": 21,
+      "rows": 60,
+      "source": "real:AOI-0002"
+    }
+  },
+  "manifest_schema_version": "1.0.0",
+  "script_version": "1.0.0",
+  "selected_keys": {
+    "gap_run_polygon": "TOY-RUN-A",
+    "known_polygon": "AOI-0002",
+    "synthetic_added": [
+      "TOY-RUN-A",
+      "TOY-CTX-A"
+    ],
+    "unseen_polygon": "AOI-0001"
+  },
+  "selection_rule": {
+    "criteria": "first alphabetically for known/unseen, first gap-run [2,4] found, fallback TOY-* if missing",
+    "max_rows_test_tiny": 60,
+    "max_rows_train_tiny": 60,
+    "seed": 42
+  },
+  "source_fingerprints": {
+    "test_data.csv": {
+      "columns": 20,
+      "rows": 57185,
+      "sha256": "de94697158743b97a8d181ee55314193a02f77731b3795f7308f594265e57c14"
+    },
+    "train_dataset.csv": {
+      "columns": 21,
+      "rows": 99955,
+      "sha256": "860779e714fe4a256b0fa7a0598f302e65ff0c3b2ed24aee1c97fb3c112b970a"
+    }
+  }
+}
