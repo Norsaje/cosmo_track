@@ -1,0 +1,25 @@
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local environments, caches and scratch worktrees
+.venv/
+venv/
+.dl-venv/
+.uv-cache/
+.env
+.env.*
+.ipynb_checkpoints/
+/tmp/
+/.coord-main/
+
+# Derived C-03 inputs: regenerate with veg_recovery.dl.c03_bridge.
+# frame.csv.gz duplicates data/train_dataset.csv byte for byte.
+/artifacts/dl/c03_derived/frame.csv.gz
+
+# Kaggle upload bundle: rebuild with configs/dl/kaggle/package_dataset.py
+/artifacts/dl/kaggle_bundle/
+/artifacts/dl/kaggle_bundle.zip

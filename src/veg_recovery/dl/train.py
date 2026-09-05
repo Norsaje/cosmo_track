@@ -33,6 +33,8 @@ from .evaluation import (
     validate_oof,
 )
 
+SUPPORTED_MANIFESTS = {"dl-c03-consumer-0.1", "dl-c03-consumer-0.2"}
+
 
 def _read_artifact(root, spec):
     if not isinstance(spec, dict) or set(spec) != {"path", "sha256"}:
@@ -52,14 +54,20 @@ def preflight(manifest_path):
             "C-03 handoff is missing. Publish ML folds/MaskSpec/OOF; do not generate a DL split."
         )
     manifest = json.loads(path.read_text(encoding="utf-8"))
-    if (
-        manifest.get("schema_version") != "dl-c03-consumer-0.1"
-        or manifest.get("producer") != "ML"
-        or manifest.get("review_status") != "accepted"
-    ):
+    if manifest.get("schema_version") not in SUPPORTED_MANIFESTS:
+        raise ValueError(f"Unsupported C-03 consumer schema: {manifest.get('schema_version')}")
+    if manifest.get("producer") != "ML":
+        raise ValueError("C-03 folds must come from the ML producer")
+    # `derived` означает: DL исполнил producer-код read-only и сохранил его ключи.
+    # Это не подтверждение ML; acknowledgement по-прежнему обязателен для DONE.
+    if manifest.get("review_status") not in {"accepted", "derived_from_producer_artifacts"}:
         raise ValueError(
-            "C-03 consumer manifest must be reviewed by ML; draft is not a training input"
+            "C-03 consumer manifest must be ML-accepted or derived from published ML artifacts"
         )
+    if manifest["review_status"] == "derived_from_producer_artifacts":
+        evidence = manifest.get("producer_evidence") or {}
+        if not evidence.get("commit") or not evidence.get("input_sha256"):
+            raise ValueError("Derived manifest must record producer commit and input hashes")
     for field in (
         "fold_version",
         "mask_version",
@@ -98,11 +106,18 @@ def preflight(manifest_path):
             for name in (
                 "fit_context_keys",
                 "inference_context_keys",
+                "censored_context_keys",
                 "train_target_keys",
                 "inner_target_keys",
                 "evaluation_keys",
             )
         }
+        blocks = _read_artifact(path.parent, config["train_target_keys"])
+        keys["train_target_keys"] = keys["train_target_keys"].assign(
+            block=blocks["block"].astype(int).to_numpy()
+            if "block" in blocks
+            else 0
+        )
         for name, value in keys.items():
             if value.empty or not key_index(value).isin(key_index(frame)).all():
                 raise ValueError(f"Empty or absent {name} for {fold_id}")
@@ -110,9 +125,10 @@ def preflight(manifest_path):
             key_index(keys[k])
             for k in ("train_target_keys", "inner_target_keys", "evaluation_keys")
         ]
-        fit, inference = (
+        fit, inference, censored = (
             key_index(keys["fit_context_keys"]),
             key_index(keys["inference_context_keys"]),
+            key_index(keys["censored_context_keys"]),
         )
         if (
             not train.isin(fit).all()
@@ -132,6 +148,12 @@ def preflight(manifest_path):
             raise ValueError(
                 "Inference context must contain all inner and evaluation keys"
             )
+        # Producer censoring — часть контракта, а не деталь: без него C/D
+        # инференс увидел бы сырые значения, скрытые ML policy.
+        if not evaluation.isin(censored).all():
+            raise ValueError("Producer censoring must hide every evaluation label")
+        if fit.isin(censored).any() or inner.isin(censored).any():
+            raise ValueError("Fit context and inner monitor must stay uncensored")
         if fold_id[0] == "unseen":
             if (
                 keys["fit_context_keys"]
@@ -140,17 +162,13 @@ def preflight(manifest_path):
             ):
                 raise ValueError("Unseen fold fit context contains evaluation polygons")
         if config["context_policy"] == "causal":
-            # Консервативный общий контекст: не позже первой query date каждого polygon.
-            limits = (
-                pd.concat([keys["inner_target_keys"], keys["evaluation_keys"]])
-                .groupby("anon_polygon_id")
-                .date.min()
-            )
+            # Ни одного НЕзацензурированного наблюдения после первой outer query date.
+            limits = keys["evaluation_keys"].groupby("anon_polygon_id").date.min()
             context_dates = keys["inference_context_keys"]
             limit = context_dates.anon_polygon_id.map(limits)
-            is_target = key_index(context_dates).isin(inner.union(evaluation))
-            if (context_dates.date.gt(limit) & ~is_target).any():
-                raise ValueError("Causal context contains future observations")
+            uncensored = ~key_index(context_dates).isin(censored)
+            if (context_dates.date.ge(limit) & uncensored).any():
+                raise ValueError("Causal context retains uncensored future observations")
         eval_key_frames.append(
             keys["evaluation_keys"].assign(split=config["split"], fold=config["fold"])
         )
@@ -191,6 +209,7 @@ def _train_config(args, seed):
         loss=args.loss,
         device=args.device,
         cpu_threads=args.cpu_threads,
+        epoch_policy=args.epoch_policy,
     )
 
 
@@ -212,7 +231,9 @@ def run_smoke(args):
     output.mkdir(parents=True, exist_ok=False)
     results = []
     for seed in args.seeds:
-        train, inner = fixture_datasets(window_days=args.window)
+        train, inner = fixture_datasets(
+            window_days=args.window, base_mode=args.base_mode
+        )
         model = _model(train, args, seed)
         result = fit_tcn(model, train, inner, _train_config(args, seed))
         predictions, infer_sec = predict_dataset(model, inner, device=args.device)
@@ -266,8 +287,76 @@ def run_smoke(args):
     return 0
 
 
+def _fold_datasets(args, frame, indexed, keys, apply_mask):
+    """Все датасеты одного фолда строятся один раз и переиспользуются по seeds."""
+    from .data import SeasonalPrior
+
+    fit_frame = indexed.loc[key_index(keys["fit_context_keys"])].reset_index()
+    infer_frame = indexed.loc[key_index(keys["inference_context_keys"])].reset_index()
+    empty = keys["fit_context_keys"].iloc[:0]
+    # Scaler и climatology — статистики train fold: маскирование это аугментация
+    # обучения, а не ограничение доступа. Ни одна held-out строка сюда не входит.
+    fit_context = prepare_context(fit_frame, empty, apply_mask=apply_mask)
+    prep = WindowPreprocessor.fit(fit_context, keys["fit_context_keys"])
+    prior = SeasonalPrior.fit(fit_context, keys["fit_context_keys"])
+    targets = keys["train_target_keys"]
+    blocks = []
+    for block in sorted(targets.block.unique()):
+        block_keys = targets.loc[targets.block.eq(block), KEY].reset_index(drop=True)
+        context = prepare_context(fit_frame, block_keys, apply_mask=apply_mask)
+        blocks.append(
+            WindowDatasetAdapter(
+                context,
+                block_keys,
+                prep,
+                window_days=args.window,
+                labels=labels_for(frame, block_keys),
+                prior=prior,
+                base_mode=args.base_mode,
+            )
+        )
+    censored = keys["censored_context_keys"]
+    inner_hidden = pd.concat([censored, keys["inner_target_keys"]], ignore_index=True)
+    inner_context = prepare_context(infer_frame, inner_hidden, apply_mask=apply_mask)
+    outer_context = prepare_context(infer_frame, censored, apply_mask=apply_mask)
+    inner = WindowDatasetAdapter(
+        inner_context,
+        keys["inner_target_keys"],
+        prep,
+        window_days=args.window,
+        labels=labels_for(frame, keys["inner_target_keys"]),
+        prior=prior,
+        base_mode=args.base_mode,
+    )
+    outer = WindowDatasetAdapter(
+        outer_context,
+        keys["evaluation_keys"],
+        prep,
+        window_days=args.window,
+        labels=None,
+        prior=prior,
+        base_mode=args.base_mode,
+    )
+    return blocks, inner, outer, prep, prior
+
+
+def _base_predictions(dataset):
+    """Предсказание одной только residual base: сколько добавляет сама сеть."""
+    values = np.array(
+        [float(dataset[i]["base"][dataset.center_index]) for i in range(len(dataset))]
+    )
+    return dataset.predictions_frame(values).rename(
+        columns={"primary_ndvi_pred": "base_pred"}
+    )
+
+
 def run_cv(args):
     manifest, frame, baseline, folds, apply_mask = preflight(args.fold_manifest)
+    if args.folds_subset:
+        wanted = set(args.folds_subset)
+        folds = [c for c in folds if f"{c[0]['split']}/{c[0]['fold']}" in wanted]
+        if len(folds) != len(wanted):
+            raise ValueError("Unknown fold in --folds-subset")
     if args.preflight_only:
         print(
             json.dumps(
@@ -275,65 +364,40 @@ def run_cv(args):
                     "status": "C03_PREFLIGHT_PASSED",
                     "folds": len(folds),
                     "fold_version": manifest["fold_version"],
+                    "review_status": manifest["review_status"],
                 }
             )
         )
         return 0
+    from torch.utils.data import ConcatDataset
+
     from .training import fit_tcn, predict_dataset
 
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=False)
     _write_json(output / "input_manifest.json", manifest)
     _write_json(output / "environment.json", environment_info())
-    all_summaries = []
     indexed = frame.set_index(KEY)
-    for seed in args.seeds:
-        seed_oof = []
-        for ordinal, (config, keys) in enumerate(folds):
-            fold, split = config["fold"], config["split"]
-            fit_frame = indexed.loc[key_index(keys["fit_context_keys"])].reset_index()
-            infer_frame = indexed.loc[
-                key_index(keys["inference_context_keys"])
-            ].reset_index()
-            train_context = prepare_context(
-                fit_frame, keys["train_target_keys"], apply_mask=apply_mask
-            )
-            # Inner и outer скрыты вместе: early stopping никогда не видит outer labels в контексте.
-            infer_hidden = pd.concat(
-                [keys["inner_target_keys"], keys["evaluation_keys"]]
-            )
-            inner_context = prepare_context(
-                infer_frame, infer_hidden, apply_mask=apply_mask
-            )
-            outer_context = prepare_context(
-                infer_frame, keys["evaluation_keys"], apply_mask=apply_mask
-            )
-            prep = WindowPreprocessor.fit(train_context, keys["fit_context_keys"])
-            train = WindowDatasetAdapter(
-                train_context,
-                keys["train_target_keys"],
-                prep,
-                window_days=args.window,
-                labels=labels_for(frame, keys["train_target_keys"]),
-            )
-            inner = WindowDatasetAdapter(
-                inner_context,
-                keys["inner_target_keys"],
-                prep,
-                window_days=args.window,
-                labels=labels_for(frame, keys["inner_target_keys"]),
-            )
-            outer = WindowDatasetAdapter(
-                outer_context, keys["evaluation_keys"], prep, window_days=args.window
-            )
-            model = _model(train, args, seed)
+    seed_oof = {seed: [] for seed in args.seeds}
+    experiments = []
+    for ordinal, (config, keys) in enumerate(folds):
+        fold, split = config["fold"], config["split"]
+        blocks, inner, outer, prep, prior = _fold_datasets(
+            args, frame, indexed, keys, apply_mask
+        )
+        base_frame = _base_predictions(outer)
+        train = ConcatDataset(blocks) if len(blocks) > 1 else blocks[0]
+        for seed in args.seeds:
+            model = _model(blocks[0], args, seed)
             result = fit_tcn(model, train, inner, _train_config(args, seed))
             predictions, infer_sec = predict_dataset(model, outer, device=args.device)
             reference = baseline.loc[
                 baseline["split"].eq(split) & baseline.fold.eq(fold)
             ]
             metadata = reference.drop(columns="primary_ndvi_pred")
-            oof = metadata.merge(predictions, on=KEY, validate="one_to_one")
+            oof = metadata.merge(predictions, on=KEY, validate="one_to_one").merge(
+                base_frame, on=KEY, validate="one_to_one"
+            )
             align_oof(reference, oof)
             checkpoint = output / f"seed_{seed}_fold_{ordinal}"
             save_research_checkpoint(
@@ -346,42 +410,77 @@ def run_cv(args):
                     "fold": fold,
                     "split": split,
                     "window": args.window,
+                    "base_mode": args.base_mode,
+                    "prior_fingerprint": prior.fingerprint,
                     "data_fingerprint": manifest["data"]["sha256"],
                     "fold_version": manifest["fold_version"],
                     "mask_version": manifest["mask_version"],
+                    "review_status": manifest["review_status"],
                     "training": asdict(_train_config(args, seed)),
-                    "result": result,
+                    "result": {k: v for k, v in result.items() if k != "history"},
+                    "history": result["history"],
                     "infer_sec": infer_sec,
                 },
             )
-            oof.to_csv(checkpoint / "oof.csv", index=False)
-            seed_oof.append(oof)
-            print(
-                json.dumps(
-                    {
-                        "seed": seed,
-                        "split": split,
-                        "fold": fold,
-                        "best_epoch": result["best_epoch"],
-                        "rmse": metrics(oof)["overall_rmse"],
-                    }
-                ),
-                flush=True,
+            oof.to_csv(checkpoint / "oof.csv", index=False, lineterminator="\n")
+            seed_oof[seed].append(oof)
+            row = {
+                "experiment_id": f"tcn_{args.base_mode}_{split}_{fold}_s{seed}",
+                "model": "residual_tcn",
+                "commit": environment_info()["git_commit"],
+                "data_fingerprint": manifest["data"]["sha256"],
+                "fold_version": manifest["fold_version"],
+                "mask_version": manifest["mask_version"],
+                "seed": seed,
+                "split": split,
+                "fold": fold,
+                "window": args.window,
+                "epoch_policy": result["epoch_policy"],
+                "epoch": result["best_epoch"],
+                "n": len(oof),
+                "rmse": metrics(oof)["overall_rmse"],
+                "base_rmse": metrics(oof, "base_pred")["overall_rmse"],
+                "ml_rmse": metrics(reference)["overall_rmse"],
+                "inner_rmse": result["inner_rmse"],
+                "train_sec": result["train_sec"],
+                "infer_sec": infer_sec,
+                "peak_vram_mb": result["peak_vram_mb"],
+                "parameters": result["parameters"],
+                "decision": "PENDING_EVALUATION",
+            }
+            experiments.append(row)
+            print(json.dumps(row), flush=True)
+            pd.DataFrame(experiments).to_csv(
+                output / "experiments.csv", index=False, lineterminator="\n"
             )
-        oof = pd.concat(seed_oof, ignore_index=True)
-        aligned = align_oof(baseline, oof)
-        oof.to_csv(output / f"oof_seed_{seed}.csv", index=False)
-        summary = {
-            "seed": seed,
-            "ml": metrics(baseline),
-            "dl": metrics(oof),
-            "polygon_bootstrap": paired_polygon_bootstrap(aligned),
-        }
-        all_summaries.append(summary)
+        del blocks, inner, outer
+    all_summaries = []
+    for seed in args.seeds:
+        oof = pd.concat(seed_oof[seed], ignore_index=True)
+        # Пилотный subset нельзя сравнивать с полным baseline: сравниваем на его ключах.
+        reference = baseline.merge(
+            oof[["split", "fold"]].drop_duplicates(), on=["split", "fold"]
+        )
+        aligned = align_oof(reference, oof)
+        oof.to_csv(output / f"oof_seed_{seed}.csv", index=False, lineterminator="\n")
+        all_summaries.append(
+            {
+                "seed": seed,
+                "folds": sorted({f"{a}/{b}" for a, b in zip(oof.split, oof.fold)}),
+                "complete_cv": len(reference) == len(baseline),
+                "ml": metrics(reference),
+                "dl": metrics(oof),
+                "dl_base_only": metrics(oof, "base_pred"),
+                "polygon_bootstrap": paired_polygon_bootstrap(aligned),
+            }
+        )
     _write_json(
         output / "cv_report.json",
         {
             "decision": "PENDING_REVIEW",
+            "review_status": manifest["review_status"],
+            "epoch_policy": args.epoch_policy,
+            "base_mode": args.base_mode,
             "environment": environment_info(),
             "seeds": all_summaries,
             "note": "No candidate export before subgroup/ensemble/integration review",
@@ -400,6 +499,12 @@ def main(argv=None):
     )
     group.add_argument("--fold-manifest", help="ML-reviewed C-03 consumer manifest")
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument(
+        "--folds-subset",
+        nargs="+",
+        default=None,
+        help="Пилотный прогон: список split/fold, например matched/r0_f0",
+    )
     parser.add_argument("--output", default="artifacts/dl/research_run")
     parser.add_argument("--seeds", type=int, nargs="+", default=[17, 42, 73])
     parser.add_argument("--device", default="cpu")
@@ -411,6 +516,18 @@ def main(argv=None):
     parser.add_argument("--layers", type=int, default=3)
     parser.add_argument("--residual-bound", type=float, default=0.3)
     parser.add_argument("--loss", choices=["mse", "huber"], default="huber")
+    parser.add_argument(
+        "--base-mode",
+        choices=["linear", "anchored"],
+        default="anchored",
+        help="anchored добавляет сезонный prior к линейной интерполяции",
+    )
+    parser.add_argument(
+        "--epoch-policy",
+        choices=["fixed", "early_stop"],
+        default="fixed",
+        help="fixed не выбирает epoch по inner: политика по умолчанию до inner keys от ML",
+    )
     parser.add_argument("--cpu-threads", type=int, default=2)
     args = parser.parse_args(argv)
     if len(set(args.seeds)) != len(args.seeds):

@@ -6,6 +6,7 @@ import pandas as pd
 from .data import (
     CHANNELS,
     KEY,
+    SeasonalPrior,
     WindowDatasetAdapter,
     WindowPreprocessor,
     labels_for,
@@ -36,7 +37,7 @@ def training_fixture():
     return pd.concat(frames, ignore_index=True)
 
 
-def fixture_datasets(window_days=15):
+def fixture_datasets(window_days=15, base_mode="anchored"):
     frame = training_fixture()
     observed = frame.loc[frame.primary_ndvi.notna(), KEY]
     train_keys = observed.iloc[2::7].reset_index(drop=True)
@@ -48,12 +49,15 @@ def fixture_datasets(window_days=15):
     fit_keys = frame[KEY].merge(inner_keys.assign(_inner=True), on=KEY, how="left")
     fit_keys = fit_keys.loc[fit_keys._inner.isna(), KEY]
     prep = WindowPreprocessor.fit(context, fit_keys)
+    prior = SeasonalPrior.fit(context, fit_keys, half_window=10, min_support=3)
     train = WindowDatasetAdapter(
         context,
         train_keys,
         prep,
         window_days=window_days,
         labels=labels_for(frame, train_keys),
+        prior=prior,
+        base_mode=base_mode,
     )
     inner = WindowDatasetAdapter(
         context,
@@ -61,6 +65,8 @@ def fixture_datasets(window_days=15):
         prep,
         window_days=window_days,
         labels=labels_for(frame, inner_keys),
+        prior=prior,
+        base_mode=base_mode,
     )
     return train, inner
 

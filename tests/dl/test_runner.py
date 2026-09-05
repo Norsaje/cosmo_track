@@ -43,12 +43,13 @@ def consumer_manifest(tmp_path, monkeypatch):
         "context_policy": "interpolation",
         "fit_context_keys": write("fit", fit),
         "inference_context_keys": write("infer", frame[KEY]),
-        "train_target_keys": write("train", train),
+        "censored_context_keys": write("censored", outer),
+        "train_target_keys": write("train", train.assign(block=[0, 1] * 4)),
         "inner_target_keys": write("inner", inner),
         "evaluation_keys": write("outer", outer),
     }
     manifest = {
-        "schema_version": "dl-c03-consumer-0.1",
+        "schema_version": "dl-c03-consumer-0.2",
         "producer": "ML",
         "review_status": "accepted",
         "fold_version": "TEST_FIXTURE_ONLY",
@@ -75,10 +76,22 @@ def test_manifest_preflight_uses_immutable_ml_keys(consumer_manifest):
 
 
 @pytest.mark.parametrize(
-    "problem", ["draft", "hash", "metrics", "overlap", "missing_mask"]
+    "problem",
+    [
+        "draft",
+        "hash",
+        "metrics",
+        "overlap",
+        "missing_mask",
+        "uncensored_evaluation",
+        "censored_fit",
+        "derived_without_evidence",
+        "unknown_schema",
+    ],
 )
 def test_bad_handoff_fails_before_training(consumer_manifest, problem):
     path, manifest = consumer_manifest
+    fold = manifest["folds"][0]
     if problem == "draft":
         manifest["review_status"] = "draft"
     elif problem == "hash":
@@ -86,13 +99,43 @@ def test_bad_handoff_fails_before_training(consumer_manifest, problem):
     elif problem == "metrics":
         manifest["baseline_metrics"]["overall_rmse"] = 0.06
     elif problem == "overlap":
-        manifest["folds"][0]["inner_target_keys"] = manifest["folds"][0][
-            "train_target_keys"
-        ]
+        fold["inner_target_keys"] = fold["train_target_keys"]
+    elif problem == "uncensored_evaluation":
+        # Без producer censoring inference увидел бы скрытые ML значения.
+        fold["censored_context_keys"] = fold["inner_target_keys"]
+    elif problem == "censored_fit":
+        fold["censored_context_keys"] = fold["fit_context_keys"]
+    elif problem == "derived_without_evidence":
+        manifest["review_status"] = "derived_from_producer_artifacts"
+    elif problem == "unknown_schema":
+        manifest["schema_version"] = "dl-c03-consumer-9.9"
     else:
         manifest["mask_callable"] = "veg_recovery.validation.missing:apply_mask"
     path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(ValueError):
+        preflight(path)
+
+
+def test_derived_manifest_needs_producer_evidence(consumer_manifest):
+    path, manifest = consumer_manifest
+    manifest["review_status"] = "derived_from_producer_artifacts"
+    manifest["producer_evidence"] = {
+        "commit": "0" * 40,
+        "input_sha256": {"train": "1" * 64},
+        "ml_acknowledgement": "pending",
+    }
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    result, _, _, folds, _ = preflight(path)
+    assert result["producer_evidence"]["ml_acknowledgement"] == "pending"
+    assert len(folds) == 1
+
+
+def test_causal_fold_rejects_uncensored_future_observation(consumer_manifest):
+    path, manifest = consumer_manifest
+    # Тот же контекст, но объявленный causal: будущие наблюдения не зацензурированы.
+    manifest["folds"][0]["context_policy"] = "causal"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="uncensored future"):
         preflight(path)
 
 
@@ -122,7 +165,11 @@ def test_fixture_cv_runner_and_research_outputs(consumer_manifest, tmp_path):
     report = json.loads((output / "cv_report.json").read_text())
     assert report["decision"] == "PENDING_REVIEW"
     assert report["seeds"][0]["dl"]["composite_rmse"] is None
-    assert len(pd.read_csv(output / "oof_seed_17.csv")) == 4
+    assert report["seeds"][0]["complete_cv"] is True
+    assert report["epoch_policy"] == "fixed"
+    oof = pd.read_csv(output / "oof_seed_17.csv")
+    assert len(oof) == 4 and "base_pred" in oof
+    assert len(pd.read_csv(output / "experiments.csv")) == 1
     manifest = json.loads((output / "seed_17_fold_0/manifest.json").read_text())
     assert manifest["production_approved"] is False
 
@@ -147,9 +194,11 @@ raise SystemExit(main(['--fold-manifest', 'MISSING_C03.json', '--preflight-only'
 
 
 def test_kaggle_notebook_is_valid_python():
-    notebook = json.loads(
-        Path("configs/dl/kaggle/run_tcn.ipynb").read_text(encoding="utf-8")
-    )
+    # В репозитории и внутри собранного Kaggle bundle notebook лежит по-разному.
+    candidates = [Path("configs/dl/kaggle/run_tcn.ipynb"), Path("run_tcn.ipynb")]
+    found = next((p for p in candidates if p.is_file()), None)
+    assert found is not None, "run_tcn.ipynb not found in repo or bundle layout"
+    notebook = json.loads(found.read_text(encoding="utf-8"))
     assert notebook["nbformat"] == 4
     for cell in notebook["cells"]:
         if cell["cell_type"] == "code":

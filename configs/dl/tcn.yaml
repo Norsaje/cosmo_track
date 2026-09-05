@@ -1,5 +1,5 @@
 # Стартовая конфигурация, не результат tuning. CLI параметры задаются явно.
-schema_version: dl-experiment-0.1
+schema_version: dl-experiment-0.2
 model: residual_tcn
 seeds: [17, 42, 73]
 window_days: 61
@@ -8,12 +8,20 @@ layers: 3
 dropout: 0.1
 residual_bound: 0.3
 loss: huber
-epochs: 40
+# Бюджет epoch зафиксирован заранее по inner-монитору пилотного фолда,
+# не по outer OOF. early_stop остаётся вариантом чувствительности.
+epoch_policy: fixed
+epochs: 16
 patience: 6
 batch_size: 32
 learning_rate: 0.001
 weight_decay: 0.001
 gradient_clip: 1.0
 cpu_threads: 2
+# anchored: residual base = сезонный prior + интерполяция отклонений.
+# linear: прежняя интерполяция, используется как ablation.
+base_mode: anchored
+train_blocks: 6
+inner_fraction: 0.08
 candidate_export: false
 requires: [C-01, C-03, ML-baseline-metric-equality]

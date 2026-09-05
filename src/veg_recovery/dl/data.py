@@ -240,6 +240,107 @@ class WindowPreprocessor:
         ).hexdigest()
 
 
+@dataclass(frozen=True)
+class SeasonalPrior:
+    """Робастный DOY-профиль из разрешённого контекста; строится ПОСЛЕ маскирования.
+
+    Полигон → культура → глобальный уровень. Скрытая строка не участвует, поэтому
+    prior не может вернуть собственный target. Для forecasting-режима это
+    единственный источник сезонной формы: окно polygon-year там пустое.
+    """
+
+    polygon: dict
+    crop: dict
+    default: tuple
+    half_window: int
+    min_support: int
+    fit_keys_hash: str
+    schema_version: str = "0.1"
+
+    @staticmethod
+    def _profile(doys, values, half_window):
+        total = np.full(367, np.nan)
+        support = np.zeros(367, dtype=np.int32)
+        if not len(doys):
+            return total, support
+        order = np.argsort(doys)
+        doys, values = doys[order], values[order]
+        # Циклическое окно: декабрь и январь соседние.
+        wrapped = np.concatenate([doys - 366, doys, doys + 366])
+        repeated = np.concatenate([values, values, values])
+        for day in range(1, 367):
+            lo = np.searchsorted(wrapped, day - half_window, side="left")
+            hi = np.searchsorted(wrapped, day + half_window, side="right")
+            window = repeated[lo:hi]
+            support[day] = len(window)
+            if len(window):
+                total[day] = float(np.median(window))
+        return total, support
+
+    @classmethod
+    def fit(cls, context: MaskedContext, fit_keys: pd.DataFrame, *,
+            half_window: int = 12, min_support: int = 6):
+        if half_window < 1 or min_support < 1:
+            raise ValueError("Prior needs positive half_window and min_support")
+        idx = key_index(fit_keys)
+        frame = context.frame.set_index(KEY)
+        if not idx.isin(frame.index).all():
+            raise ValueError("Prior fit keys absent from masked context")
+        allowed = frame.loc[idx].reset_index()
+        values = pd.to_numeric(allowed.primary_ndvi, errors="raise").to_numpy(float)
+        visible = np.isfinite(values)
+        if not visible.any():
+            raise ValueError("Prior needs visible primary_ndvi in the allowed context")
+        allowed = allowed.loc[visible].copy()
+        values = values[visible]
+        doys = allowed.date.dt.dayofyear.to_numpy()
+        polygon, crop = {}, {}
+        for name, rows in allowed.groupby("anon_polygon_id", sort=True):
+            mask = allowed.anon_polygon_id.to_numpy() == name
+            profile, support = cls._profile(doys[mask], values[mask], half_window)
+            polygon[str(name)] = (profile, support)
+        for name, rows in allowed.groupby(allowed.crop_type.astype(str), sort=True):
+            mask = allowed.crop_type.astype(str).to_numpy() == name
+            profile, support = cls._profile(doys[mask], values[mask], half_window)
+            crop[str(name)] = (profile, support)
+        default, _ = cls._profile(doys, values, half_window)
+        default = np.where(np.isfinite(default), default, float(np.median(values)))
+        payload = canonical_keys(fit_keys).sort_values(KEY).to_csv(index=False)
+        return cls(polygon, crop, tuple(float(v) for v in default), half_window,
+                   min_support, sha256(payload.encode()).hexdigest())
+
+    def series(self, polygon: str, crop: str, doys: np.ndarray):
+        """Возвращает prior и уровень поддержки (2=polygon, 1=crop, 0=global)."""
+        doys = np.asarray(doys, dtype=int)
+        default = np.asarray(self.default, dtype=float)
+        out = default[doys]
+        level = np.zeros(len(doys), dtype=np.float32)
+        for source, code in ((self.crop.get(str(crop)), 1.0),
+                             (self.polygon.get(str(polygon)), 2.0)):
+            if source is None:
+                continue
+            profile, support = source
+            usable = (support[doys] >= self.min_support) & np.isfinite(profile[doys])
+            out = np.where(usable, profile[doys], out)
+            level = np.where(usable, code, level)
+        if not np.isfinite(out).all():
+            raise ValueError("Seasonal prior must be finite everywhere")
+        return out.astype(np.float32), level
+
+    @property
+    def fingerprint(self) -> str:
+        payload = {
+            "schema_version": self.schema_version,
+            "half_window": self.half_window,
+            "min_support": self.min_support,
+            "fit_keys_hash": self.fit_keys_hash,
+            "polygons": sorted(self.polygon),
+            "crops": sorted(self.crop),
+            "default": [round(v, 12) for v in self.default],
+        }
+        return sha256(json.dumps(payload, sort_keys=True, allow_nan=False).encode()).hexdigest()
+
+
 def _deltas(observed: np.ndarray, cap: int) -> tuple[np.ndarray, np.ndarray]:
     positions = np.arange(len(observed))[:, None]
     left = np.maximum.accumulate(np.where(observed, positions, -cap), axis=0)
@@ -264,13 +365,21 @@ class WindowDatasetAdapter:
         *,
         window_days: int = 61,
         labels: pd.DataFrame | None = None,
+        prior: "SeasonalPrior | None" = None,
+        base_mode: str = "linear",
     ):
         if window_days < 3 or window_days % 2 == 0:
             raise ValueError("window_days must be odd and >= 3")
+        if base_mode not in {"linear", "anchored"}:
+            raise ValueError("base_mode must be linear or anchored")
+        if base_mode == "anchored" and prior is None:
+            raise ValueError("Anchored base requires a fitted seasonal prior")
         self.keys = canonical_keys(target_keys)
         self.preprocessor = preprocessor
         self.window_days = window_days
         self.center_index = window_days // 2
+        self.prior = prior
+        self.base_mode = base_mode
         source = context.frame.copy(deep=True)
         source_idx = key_index(source)
         idx = key_index(self.keys)
@@ -315,12 +424,32 @@ class WindowDatasetAdapter:
             values = np.where(
                 observed, (x - preprocessor.center) / preprocessor.scale, 0
             ).astype(np.float32)
+            days = calendar.dayofyear.to_numpy()
+            crop_name = str(
+                grid.crop_type.ffill().bfill().dropna().iloc[0]
+                if grid.crop_type.notna().any()
+                else ""
+            )
+            if prior is None:
+                prior_values = np.full(len(grid), preprocessor.center[0], np.float32)
+                prior_level = np.zeros(len(grid), np.float32)
+            else:
+                prior_values, prior_level = prior.series(polygon, crop_name, days)
             visible = np.flatnonzero(observed[:, 0])
-            base = (
-                np.interp(np.arange(len(grid)), visible, x[visible, 0])
-                if len(visible)
-                else np.full(len(grid), preprocessor.center[0])
-            ).astype(np.float32)
+            if not len(visible):
+                # Forecasting-режим: в этом polygon-year нет разрешённых наблюдений.
+                base = prior_values.copy()
+            elif self.base_mode == "anchored":
+                offsets = x[visible, 0] - prior_values[visible]
+                base = (
+                    prior_values
+                    + np.interp(np.arange(len(grid)), visible, offsets)
+                ).astype(np.float32)
+            else:
+                base = np.interp(
+                    np.arange(len(grid)), visible, x[visible, 0]
+                ).astype(np.float32)
+            base = base.astype(np.float32)
             # Новая культура в held-out получает token 0; unknown не становится известной.
             crops = (
                 grid.crop_type.ffill()
@@ -330,7 +459,6 @@ class WindowDatasetAdapter:
                 .fillna(0)
                 .to_numpy(np.int64)
             )
-            days = calendar.dayofyear.to_numpy()
             phase = 2 * np.pi * (days - 1) / np.where(calendar.is_leap_year, 366, 365)
             cal = np.stack([np.sin(phase), np.cos(phase)], axis=-1).astype(np.float32)
             synthetic = grid._synthetic.astype("boolean").fillna(False).to_numpy(bool)
@@ -347,6 +475,8 @@ class WindowDatasetAdapter:
                 cal,
                 synthetic,
                 natural,
+                prior_values,
+                prior_level,
             )
 
     def __len__(self):
@@ -354,8 +484,9 @@ class WindowDatasetAdapter:
 
     @property
     def input_features(self):
-        # x, observation mask, invalid flag, since/until, calendar, valid-time.
-        return 5 * len(self.preprocessor.channels) + 3
+        # x, observation mask, invalid flag, since/until, calendar, valid-time,
+        # плюс нормированные base/prior и уровень поддержки prior.
+        return 5 * len(self.preprocessor.channels) + 6
 
     def __getitem__(self, index):
         row = self.keys.iloc[index]
@@ -372,6 +503,8 @@ class WindowDatasetAdapter:
             cal,
             synthetic,
             natural,
+            prior_values,
+            prior_level,
         ) = seq
         position = (row.date - calendar[0]).days
         offsets = np.arange(self.window_days) + position - self.center_index
@@ -386,8 +519,22 @@ class WindowDatasetAdapter:
 
         x, obs, inv = take(values), take(observed), take(invalid)
         left, right = take(since), take(until)
+        center, scale = self.preprocessor.center[0], self.preprocessor.scale[0]
+        base_window = take(base)
+        prior_window = take(prior_values)
         features = np.concatenate(
-            [x, obs, inv, np.log1p(left), np.log1p(right), take(cal), valid[:, None]],
+            [
+                x,
+                obs,
+                inv,
+                np.log1p(left),
+                np.log1p(right),
+                take(cal),
+                valid[:, None],
+                ((base_window - center) / scale * valid)[:, None],
+                ((prior_window - center) / scale * valid)[:, None],
+                take(prior_level)[:, None],
+            ],
             axis=-1,
         ).astype(np.float32)
         loss_mask = np.zeros(self.window_days, dtype=bool)
@@ -408,7 +555,9 @@ class WindowDatasetAdapter:
             "synthetic_gap_mask": take(synthetic),
             "loss_mask": loss_mask,
             "labels": labels,
-            "base": take(base),
+            "base": base_window,
+            "prior": prior_window,
+            "prior_level": take(prior_level),
             "crop_ids": take(crops),
             "dates": dates,
             "index": index,

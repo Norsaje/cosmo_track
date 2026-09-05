@@ -26,6 +26,7 @@ class TrainingConfig:
     loss: str = "huber"
     device: str = "cpu"
     cpu_threads: int = 2
+    epoch_policy: str = "early_stop"
 
     def __post_init__(self):
         if (
@@ -34,6 +35,7 @@ class TrainingConfig:
             or self.weight_decay < 0
             or self.gradient_clip <= 0
             or self.loss not in {"huber", "mse"}
+            or self.epoch_policy not in {"early_stop", "fixed"}
         ):
             raise ValueError("Invalid training configuration")
 
@@ -90,24 +92,34 @@ def predict_dataset(model, dataset, *, device="cpu", batch_size=64):
 
 
 def fit_tcn(model, train_dataset, early_stop_dataset, config: TrainingConfig):
-    from .data import key_index
+    """`fixed` не выбирает epoch: inner RMSE только логируется как монитор.
 
-    if key_index(train_dataset.keys).isin(key_index(early_stop_dataset.keys)).any():
-        raise ValueError("Training and early-stop labels overlap")
+    Это политика по умолчанию для конкурсной CV, пока ML не передал inner keys.
+    """
+    from .data import key_index
+    from torch.utils.data import ConcatDataset
+
+    parts = (
+        list(train_dataset.datasets)
+        if isinstance(train_dataset, ConcatDataset)
+        else [train_dataset]
+    )
+    reference = parts[0]
+    for part in parts:
+        if key_index(part.keys).isin(key_index(early_stop_dataset.keys)).any():
+            raise ValueError("Training and early-stop labels overlap")
+        if part.preprocessor.fingerprint != reference.preprocessor.fingerprint:
+            raise ValueError("All training blocks must share one fitted preprocessor")
+        if not np.isfinite(part.y).all():
+            raise ValueError("Supervised train labels are required")
     if len(train_dataset) == 0 or len(early_stop_dataset) == 0:
         raise ValueError("Training and early-stop datasets must be nonempty")
-    if (
-        train_dataset.preprocessor.fingerprint
-        != early_stop_dataset.preprocessor.fingerprint
-    ):
+    if reference.preprocessor.fingerprint != early_stop_dataset.preprocessor.fingerprint:
         raise ValueError(
             "Train and validation must share the train-fitted preprocessor"
         )
-    if (
-        not np.isfinite(train_dataset.y).all()
-        or not np.isfinite(early_stop_dataset.y).all()
-    ):
-        raise ValueError("Supervised train/early-stop labels are required")
+    if not np.isfinite(early_stop_dataset.y).all():
+        raise ValueError("Supervised early-stop labels are required")
     if config.device.startswith("cuda") and not torch.cuda.is_available():
         raise RuntimeError(
             "CUDA unavailable: use --device cpu or the documented Kaggle GPU runner"
@@ -170,6 +182,12 @@ def fit_tcn(model, train_dataset, early_stop_dataset, config: TrainingConfig):
         history.append(
             {"epoch": epoch, "train_loss": train_loss / count, "inner_rmse": error}
         )
+        if config.epoch_policy == "fixed":
+            best, best_epoch, stale = error, epoch, 0
+            best_state = copy.deepcopy(
+                {key: value.detach().cpu() for key, value in model.state_dict().items()}
+            )
+            continue
         if error < best - 1e-8:
             best, best_epoch, stale = error, epoch, 0
             best_state = copy.deepcopy(
@@ -188,6 +206,7 @@ def fit_tcn(model, train_dataset, early_stop_dataset, config: TrainingConfig):
         else 0.0
     )
     return {
+        "epoch_policy": config.epoch_policy,
         "best_epoch": best_epoch,
         "inner_rmse": best,
         "history": history,
