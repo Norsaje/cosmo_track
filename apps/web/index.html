@@ -343,6 +343,13 @@
       min-width: 0;
     }
     .list li[aria-selected="true"] { border-color: var(--primary); background: var(--primary-soft); }
+    /* Шапка плитки: текст и кнопка удаления делят строку как соседи, а не
+       накладываются. Раньше кнопка была позиционирована абсолютно, а место под
+       неё резервировалось отступом у заголовка — резерв переставал работать,
+       как только менялась длина текста, и кнопка наезжала на вторую строку. */
+    .tile-head { display: flex; align-items: flex-start; gap: 8px; }
+    .tile-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+
     .list li .title {
       font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
       min-width: 0;
@@ -350,8 +357,6 @@
          без переноса ломает всю панель. Рвём по любому месту, а не только
          по пробелам. */
       overflow-wrap: anywhere;
-      /* Место под кнопку удаления, которая лежит в правом верхнем углу. */
-      padding-right: 34px;
     }
     .list li .meta {
       color: var(--muted); font-size: var(--font-tiny);
@@ -370,7 +375,7 @@
       cursor: default;
     }
     .tile-delete {
-      position: absolute; top: 8px; right: 8px;
+      flex: 0 0 auto;
       min-height: 32px; min-width: 32px; padding: 0 8px;
       font-size: var(--font-tiny); line-height: 1;
     }
@@ -862,10 +867,17 @@
           : '<span class="chip chip-warning"><i class="dot"></i>без данных</span>';
         const repaired = (polygon.validation_notes || []).length
           ? '<span class="chip chip-default">контур исправлен</span>' : "";
-        item.innerHTML =
+        const head = document.createElement("div");
+        head.className = "tile-head";
+        const main = document.createElement("div");
+        main.className = "tile-main";
+        main.innerHTML =
           '<div class="title">' + esc(polygon.name) + repaired + "</div>" +
           '<div class="meta">' + polygon.area_ha.toFixed(1) + " га · " +
           esc(polygon.crop_type || "культура не указана") + source + "</div>";
+        head.appendChild(main);
+        if (polygon.id === state.selected) head.appendChild(buildDeleteButton(polygon));
+        item.appendChild(head);
         if (polygon.id === state.selected) item.appendChild(buildDetails(polygon));
 
         const choose = (event) => {
@@ -889,13 +901,10 @@
       return [];
     }
 
-    function buildDetails(polygon) {
-      const box = document.createElement("div");
-      box.className = "tile-details";
-
-      // Удаление — в правом верхнем углу плитки: оно относится к полю целиком,
-      // а не к анализу, и не должно стоять рядом с кнопкой запуска, где легко
-      // промахнуться после долгой настройки периода.
+    // Удаление — в правом верхнем углу плитки: оно относится к полю целиком,
+    // а не к анализу, и не должно стоять рядом с кнопкой запуска, где легко
+    // промахнуться после долгой настройки периода.
+    function buildDeleteButton(polygon) {
       const remove = document.createElement("button");
       remove.className = "tile-delete btn-danger";
       remove.type = "button";
@@ -903,7 +912,12 @@
       remove.setAttribute("aria-label", "Удалить поле " + polygon.name);
       remove.innerHTML = "&#10005;";
       remove.onclick = (event) => { event.stopPropagation(); deleteSelected(); };
-      polygon.__deleteButton = remove;
+      return remove;
+    }
+
+    function buildDetails(polygon) {
+      const box = document.createElement("div");
+      box.className = "tile-details";
 
       const ring = polygonRing(polygon);
       // Последняя точка кольца дублирует первую по правилам GeoJSON — показывать
@@ -953,7 +967,7 @@
         'aria-valuenow="0"><i id="job-bar" style="width:0%"></i></div>' +
         '<div class="stages" id="job-stages"></div><div id="job-alert"></div>';
 
-      box.append(remove, coordsTitle, coords, periodLabel, dates, run, job);
+      box.append(coordsTitle, coords, periodLabel, dates, run, job);
       return box;
     }
 

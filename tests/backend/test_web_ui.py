@@ -348,8 +348,9 @@ def test_analysis_lives_inside_the_field_tile(page: str) -> None:
     """
     assert "function buildDetails(polygon)" in page
     assert 'box.className = "tile-details"' in page
-    # Порядок частей: удаление, координаты, период, запуск, ход выполнения.
-    assert "box.append(remove, coordsTitle, coords, periodLabel, dates, run, job)" in page
+    # Порядок частей развёрнутой плитки: координаты, период, запуск, ход
+    # выполнения. Удаление стоит выше, в шапке плитки, — оно про поле целиком.
+    assert "box.append(coordsTitle, coords, periodLabel, dates, run, job)" in page
     # Повторный клик по плитке сворачивает её.
     assert "select(polygon.id === state.selected ? null : polygon.id)" in page
 
@@ -361,7 +362,14 @@ def test_tile_shows_delete_and_vertex_coordinates(page: str) -> None:
     рядом с ней легко промахнуться после долгой настройки периода.
     """
     assert 'remove.className = "tile-delete btn-danger"' in page
-    assert re.search(r"\.tile-delete\s*\{[^}]*position:\s*absolute[^}]*right:", page)
+    # Кнопка делит строку с текстом как сосед по flex, а не лежит поверх него.
+    # Абсолютное позиционирование резервировало место отступом у заголовка, и
+    # резерв переставал работать при другой длине названия — кнопка наезжала
+    # на вторую строку. Проверяется именно отсутствие наложения по построению.
+    assert re.search(r"\.tile-head\s*\{[^}]*display:\s*flex", page)
+    assert re.search(r"\.tile-main\s*\{[^}]*flex:\s*1[^}]*min-width:\s*0", page)
+    assert not re.search(r"\.tile-delete\s*\{[^}]*position:\s*absolute", page)
+    assert "head.appendChild(buildDeleteButton(polygon))" in page
     assert "Вершины контура (широта, долгота)" in page
     # Замыкающая точка кольца GeoJSON дублирует первую — человеку её не показываем.
     assert "ring.slice(0, -1)" in page
