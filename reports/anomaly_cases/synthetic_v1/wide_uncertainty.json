@@ -1,0 +1,14 @@
+{
+  "schema_version": "0.1",
+  "algorithm_version": "robust-loyo-events-0.1.0",
+  "events": [],
+  "warnings": [
+    "LOW_RECONSTRUCTION_SUPPORT"
+  ],
+  "confidence_semantics": "heuristic_support_not_calibrated_probability",
+  "case_kind": "synthetic_proxy_not_real_accuracy",
+  "truth_interval": null,
+  "event_iou": null,
+  "earliest_support_delay_days": null,
+  "delay_caveat": "Retrospective detector; earliest support is not a measured online alarm delay"
+}

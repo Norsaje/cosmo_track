@@ -1,12 +1,49 @@
 # Разработчик 2 — Deep Learning и продвинутая детекция аномалий
 
-Версия плана: 2026-09-04  
-Роль: R&D-владелец нейросетевой импутации, uncertainty и событий аномалий  
+Версия плана: 2026-09-05
+Роль: R&D-владелец нейросетевой импутации, uncertainty и событий аномалий
 Главный результат: честное сравнение DL с сильным ML и улучшение anomaly-подсистемы без риска для MVP
+
+## Уточнения после проверки репозитория 2026-09-05
+
+Исходный `main` (6d5e5fa) содержит постановку и данные, но не содержит
+C-01/C-03, ML OOF, pyproject.toml или uv.lock. Числа RMSE из исходного R&D
+ниже остаются ориентирами, а не воспроизведёнными результатами этой ветки.
+Командные статусы публикуются непосредственно в `main:00_team_coordination.md`.
+
+- Маска применяется ко **всему разрешённому контексту до windowing**, включая
+  все held-out keys, которые могли бы попасть в соседние перекрывающиеся окна.
+  Scaler, interpolation base и любые priors строятся после удаления этих значений.
+- Training/inner early-stop/outer OOF labels разделены. Inner keys предоставляет
+  ML; DL не создаёт собственную validation split. Если inner keys не предоставлены,
+  нужен согласованный ML fixed-epoch policy либо handoff этих keys.
+- Composite — взвешенная сумма RMSE CV-A/B/C/D, отдельно от row-weighted overall
+  RMSE/GapScore. Отсутствующий режим не получает автоматически нулевой вес.
+- До появления сравнимых OOF статус решения — `PENDING_EVALUATION`.
+  `REJECT` означает проведённый эксперимент, а не отсутствие dependencies.
+- Stock PyPOTS SAITS.fit маскирует отдельные ячейки MCAR. Для конкурсного
+  эксперимента потребуется matched-mask training bridge; одна оболочка impute
+  и успешный тест формы массива не являются воспроизведением BRITS/SAITS.
+  Источник: https://github.com/WenjieDu/PyPOTS/blob/main/pypots/imputation/saits/data.py.
+- В C-09 confidence — heuristic support, не калиброванная вероятность anomaly.
+  Недостаточная история возвращает diagnostic warning; отсутствие события при
+  недостатке данных нельзя интерпретировать как подтверждённую норму.
+- LOYO исключает оцениваемый год у всех reference polygons. Используется равный
+  вес reference years; выборка с ежедневными наблюдениями не считается сотнями лет.
+- Reference calibration/LOYO anomaly fit принимает только разрешённые train
+  observations. Unsupported sensor mapping не выдаётся за гармонизацию.
+- GPU: по указанию пользователя полный CUDA-прогон подготавливается для Kaggle.
+  Локальные unit/smoke проверки остаются на CPU. Notebook и инструкция:
+  `configs/dl/kaggle/`. Никаких pretrained downloads в runtime.
+- До SH-002 доступны команды `PYTHONPATH=src python ...`; обещание
+  `uv sync --extra dl` вступит в силу после handoff Backend. Общий lock принадлежит Backend.
+
+Текущая реализация, ограничения и точные команды: `reports/dl_decision.md`.
+Предложение consumer для будущего C-03: `configs/dl/c03_consumer.md`.
 
 ---
 
-# Часть 1. Что нужно прочитать человеку
+# Часть 1. Вводные
 
 ## 1. Миссия
 
@@ -49,21 +86,21 @@ P2:
 
 ## 4. Связь с баллами и сроками
 
-| Вклад роли | Максимум в критериях | Доказательство |
-|---|---:|---|
-| Возможный прирост GapScore | 30 | только одинаковый OOF/CV с ML |
-| Детекция аномалий | 7 | события, severity, кейсы, false-positive tests |
-| Дополнительные идеи | 5 | uncertainty/representations с измеримой пользой |
-| Исследование | 10 | отрицательные и положительные опыты |
-| Интерпретируемость/UX | часть 10 | reason codes и confidence contract |
+| Вклад роли                        | Максимум в критериях | Доказательство                                        |
+| ------------------------------------------ | -------------------------------------: | ------------------------------------------------------------------- |
+| Возможный прирост GapScore |                                     30 | только одинаковый OOF/CV с ML                      |
+| Детекция аномалий          |                                      7 | события, severity, кейсы, false-positive tests          |
+| Дополнительные идеи      |                                      5 | uncertainty/representations с измеримой пользой    |
+| Исследование                   |                                     10 | отрицательные и положительные опыты |
+| Интерпретируемость/UX    |                          часть 10 | reason codes и confidence contract                                 |
 
-| Период | Результат |
-|---|---|
-| Первые 4 часа | WindowDataset, equality-check folds/metrics |
-| 4–12 часов | малый TCN/GRU и один PyPOTS baseline |
-| 12–24 часа | SAITS/BRITS comparison и ADOPT/REJECT pre-decision |
-| 24–48 часов | anomaly events, harmonization, uncertainty |
-| 48–72+ часов | CSDI/pretrained/HELIX только после основных gates |
+| Период            | Результат                                                   |
+| ----------------------- | -------------------------------------------------------------------- |
+| Первые 4 часа | WindowDataset, equality-check folds/metrics                          |
+| 4–12 часов        | малый TCN/GRU и один PyPOTS baseline                       |
+| 12–24 часа         | SAITS/BRITS comparison и ADOPT/REJECT pre-decision                  |
+| 24–48 часов       | anomaly events, harmonization, uncertainty                           |
+| 48–72+ часов      | CSDI/pretrained/HELIX только после основных gates |
 
 Ближайший milestone: одна DL-модель с OOF на тех же ключах, что HGB. Blockers: frozen folds и ML OOF predictions. Если они задерживаются, можно писать dataset/tests и anomaly synthetic tests, но нельзя придумывать альтернативную split.
 
@@ -83,11 +120,11 @@ Python 3.11, uv, PyTorch, PyPOTS, NumPy, pandas, scikit-learn, einops, torchmetr
 
 Ожидаемые команды:
 
-~~~bash
+```bash
 uv sync --extra dl
 uv run python -m veg_recovery.dl.train experiment=saits
 uv run pytest -q tests/dl
-~~~
+```
 
 Код должен работать на CPU на малом fixture. Полное обучение может использовать CUDA, но обязано иметь понятный CPU fallback.
 
@@ -132,7 +169,7 @@ uv run pytest -q tests/dl
 
 ---
 
-# Часть 2. Техническое задание для кодингового агента
+# Часть 2. Техническое задание для агента
 
 ## ROLE
 
@@ -477,7 +514,7 @@ Reason codes:
 
 ## INTERFACE ДЛЯ BACKEND
 
-~~~python
+```python
 @dataclass(frozen=True)
 class AnomalyEvent:
     start_date: date
@@ -492,7 +529,7 @@ class AnomalyEvent:
     reason_codes: tuple[str, ...]
     explanation_ru: str
     algorithm_version: str
-~~~
+```
 
 Detector API получает harmonized series + weather + quality; возвращает JSON-serializable events. Он не ходит в сеть и не читает БД.
 

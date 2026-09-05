@@ -1,0 +1,71 @@
+{
+  "kind": "synthetic_only",
+  "config_fingerprint": "d28e8847f2326116d57d3e382c6809a76289eeac5b5bbba67e7fb6c62a786f8b",
+  "cases": [
+    {
+      "case": "mild_pulse",
+      "expected_event": true,
+      "events": 1,
+      "severity": [
+        "biomass_suppression"
+      ],
+      "iou": 1.0,
+      "earliest_support_delay_days": 2
+    },
+    {
+      "case": "medium_pulse",
+      "expected_event": true,
+      "events": 1,
+      "severity": [
+        "critical"
+      ],
+      "iou": 1.0,
+      "earliest_support_delay_days": 2
+    },
+    {
+      "case": "strong_pulse",
+      "expected_event": true,
+      "events": 1,
+      "severity": [
+        "critical"
+      ],
+      "iou": 1.0,
+      "earliest_support_delay_days": 2
+    },
+    {
+      "case": "source_switch",
+      "expected_event": false,
+      "events": 0,
+      "severity": [],
+      "iou": null,
+      "earliest_support_delay_days": null
+    },
+    {
+      "case": "single_outlier",
+      "expected_event": false,
+      "events": 0,
+      "severity": [],
+      "iou": null,
+      "earliest_support_delay_days": null
+    },
+    {
+      "case": "wide_uncertainty",
+      "expected_event": false,
+      "events": 0,
+      "severity": [],
+      "iou": null,
+      "earliest_support_delay_days": null
+    },
+    {
+      "case": "normal",
+      "expected_event": false,
+      "events": 0,
+      "severity": [],
+      "iou": null,
+      "earliest_support_delay_days": null
+    }
+  ],
+  "false_alerts_in_four_negative_controls": 0,
+  "real_world_precision_recall": null,
+  "human_review": "pending"
+}
