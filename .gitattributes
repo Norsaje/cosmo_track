@@ -2,3 +2,4 @@
 /data/*.csv -text
 /configs/ml/folds_v1.csv -text
 /artifacts/ml/baseline_v1/** -text
+/artifacts/ml/ndvi_backend_handoff_v1/** -text
