@@ -47,19 +47,73 @@ async def live() -> LiveResponse:
     return LiveResponse()
 
 
+def _database_status(database_url: str) -> ComponentStatus:
+    """Проверка БД реальным запросом, а не наличием строки подключения.
+
+    `SELECT 1` вместо простого открытия соединения: пул может отдать протухший
+    сокет, и «подключились» окажется ложью до первого настоящего запроса.
+    Заодно проверяем, что миграции применены — пустая схема это не готовность.
+    """
+    if not database_url:
+        return ComponentStatus.NOT_CONFIGURED
+    try:
+        from sqlalchemy import text
+
+        from apps.db.base import get_engine
+
+        with get_engine().connect() as connection:
+            connection.execute(text("SELECT 1"))
+            applied = connection.execute(
+                text("SELECT count(*) FROM alembic_version")
+            ).scalar_one()
+    except Exception:
+        # Наружу уходит только статус: ни строки подключения, ни текста драйвера
+        # в ответе health быть не должно (инвариант 11).
+        return ComponentStatus.DOWN
+    return ComponentStatus.OK if applied else ComponentStatus.DEGRADED
+
+
+def _redis_status(redis_url: str) -> ComponentStatus:
+    """Ping брокера. Без него воркер не получит ни одной задачи (BE-006)."""
+    if not redis_url:
+        return ComponentStatus.NOT_CONFIGURED
+    try:
+        import redis
+
+        client = redis.Redis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
+        client.ping()
+        client.close()
+    except Exception:
+        return ComponentStatus.DOWN
+    return ComponentStatus.OK
+
+
 @router.get("/health/ready", response_model=ReadyResponse)
 async def ready() -> ReadyResponse:
     """Готовность к работе: БД, Redis, model bundle.
 
-    В BE-001 подключений к БД и Redis ещё нет (это BE-002/BE-006), поэтому они
-    честно отвечают not_configured, а не выдуманным ok.
+    Агрегированный статус — самый слабый из компонентов. `ok` выставляется только
+    когда готовы все три: заявить готовность при отсутствующей модели значит
+    обещать анализ, который не выполнится.
     """
     settings = get_settings()
+    database = _database_status(settings.database_url)
+    redis_status = _redis_status(settings.redis_url)
+    bundle = _bundle_status(settings.model_bundle_path)
+
+    components = (database, redis_status, bundle)
+    if all(component is ComponentStatus.OK for component in components):
+        overall = ComponentStatus.OK
+    elif ComponentStatus.DOWN in components:
+        overall = ComponentStatus.DOWN
+    else:
+        overall = ComponentStatus.DEGRADED
+
     return ReadyResponse(
-        status=ComponentStatus.DEGRADED,
-        database=ComponentStatus.NOT_CONFIGURED,
-        redis=ComponentStatus.NOT_CONFIGURED,
-        model_bundle=_bundle_status(settings.model_bundle_path),
+        status=overall,
+        database=database,
+        redis=redis_status,
+        model_bundle=bundle,
     )
 
 

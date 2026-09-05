@@ -127,9 +127,27 @@ extend-exclude = [
     "data/",
     "used_prompts/",
     "graphify-out/",
+    # Ревизии Alembic генерируются автоматически: длинные строки с определениями
+    # колонок и порядок импортов там задаёт шаблон, а не мы. Форматировать их руками
+    # бессмысленно — следующий autogenerate вернёт всё обратно. Наш собственный
+    # migrations/env.py под линтером остаётся.
+    "migrations/versions/",
     # Зоны других разработчиков (§5 CLAUDE.md): линтуем и форматируем только своё.
+    # После мержа ветки models код Разработчика 1 лежит в нашем дереве — правила
+    # форматирования у него свои, и приводить чужие файлы к нашему стилю нельзя:
+    # это конфликт при следующем мерже и правка вне своей зоны.
+    "src/veg_recovery/contracts.py",
+    "src/veg_recovery/inference.py",
+    "src/veg_recovery/data/",
+    "src/veg_recovery/features/",
+    "src/veg_recovery/models/",
+    "src/veg_recovery/validation/",
+    "src/veg_recovery/cli/",
     "src/veg_recovery/dl/",
     "src/veg_recovery/anomalies/",
+    "artifacts/",
+    # reports/ — зона ML и DL (эксперименты, отчёты, построение графиков).
+    "reports/",
     "scripts/",
     "tests/tools/",
     "tests/smoke/",

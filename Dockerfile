@@ -20,11 +20,19 @@ COPY pyproject.toml uv.lock README.md ./
 # extra ml нужен именно в рантайме: C-04 — trained-бандл, и joblib поднимает
 # ColumnTransformer из sklearn и CatBoostRegressor. Без него загрузка модели
 # падает уже при старте воркера, а не при первом запросе.
-RUN uv sync --frozen --no-install-project --extra web --extra core --extra ml
+# extra geo — shapely и pyproj: валидация контура и площадь в projected CRS
+# выполняются на сервере (инвариант 2), значит нужны и API, и воркеру.
+RUN uv sync --frozen --no-install-project --extra web --extra core --extra ml --extra geo
 
 COPY src ./src
 COPY apps ./apps
-RUN uv sync --frozen --extra web --extra core --extra ml
+RUN uv sync --frozen --extra web --extra core --extra ml --extra geo \
+    # catboost тянет с собой jupyter-виджеты и nbextensions — почти гигабайт,
+    # который в рантайме сервиса не используется никогда. Инференс их не импортирует,
+    # а образ с ними не помещается на диск сборочной машины.
+    && rm -rf /opt/venv/share/jupyter /opt/venv/share/nbextensions \
+    && find /opt/venv -name "__pycache__" -type d -prune -exec rm -rf {} + \
+    && find /opt/venv -name "*.pyc" -delete
 
 # Контейнер не работает под root (§8.11 ТЗ).
 RUN useradd --create-home --uid 10001 appuser \

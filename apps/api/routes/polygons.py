@@ -1,29 +1,41 @@
-"""Роуты полигонов. Схемы зафиксированы в C-07, реализация — BE-004."""
+"""Роуты полигонов (BE-004). Схемы зафиксированы в C-07.
+
+Геометрия пересекает границу API только как GeoJSON в EPSG:4326 (инвариант 2);
+всё метрическое — площадь, пределы — считает `geospatial.geometry` в projected CRS.
+"""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, status
+import json
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from geoalchemy2.shape import from_shape, to_shape
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from apps.api.deps import get_db
 from apps.api.schemas import (
     ErrorResponse,
     FieldSearchRequest,
     FieldSearchResponse,
+    GeoJSONGeometry,
     PolygonCreate,
     PolygonList,
     PolygonOut,
     PolygonSource,
 )
+from apps.db.models import Polygon
+from veg_recovery.geospatial.geometry import GeometryError, normalize
 
 #: Единый конверт ошибки объявляется в OpenAPI, иначе сгенерированный клиент
 #: не узнает про error_code и будет читать несуществующее поле detail.
 ERRORS = {
+    404: {"model": ErrorResponse, "description": "Объект не найден"},
     422: {"model": ErrorResponse, "description": "Некорректное тело запроса"},
     501: {"model": ErrorResponse, "description": "Ещё не реализовано"},
 }
 
 router = APIRouter(tags=["polygons"], responses=ERRORS)
-
-_NOT_IMPLEMENTED = "Реализуется в BE-004 (polygon CRUD) и BE-010 (field search)."
 
 
 def _parse_bbox(raw: str) -> tuple[float, float, float, float]:
@@ -35,41 +47,120 @@ def _parse_bbox(raw: str) -> tuple[float, float, float, float]:
         minx, miny, maxx, maxy = (float(p) for p in parts)
     except ValueError:
         raise HTTPException(422, detail="bbox содержит нечисловые значения") from None
-    if not (-180 <= minx < maxx <= 180 and -90 <= miny < maxy <= 90):
+    lon_ok = -180 <= minx <= 180 and -180 <= maxx <= 180
+    lat_ok = -90 <= miny <= 90 and -90 <= maxy <= 90
+    if not (lon_ok and lat_ok):
         raise HTTPException(422, detail="bbox вне допустимых координат EPSG:4326")
+    if minx >= maxx or miny >= maxy:
+        raise HTTPException(422, detail="bbox вырожден: minx<maxx и miny<maxy обязательны")
     return minx, miny, maxx, maxy
+
+
+def _to_out(row: Polygon) -> PolygonOut:
+    """Модель БД → схема C-07. Геометрия отдаётся как GeoJSON, не как WKB."""
+    shapely_geometry = to_shape(row.geometry)
+    return PolygonOut(
+        id=str(row.id),
+        name=row.name or "",
+        geometry=GeoJSONGeometry(**json.loads(json.dumps(shapely_geometry.__geo_interface__))),
+        source=PolygonSource(row.source),
+        source_id=row.source_id,
+        crop_type=row.crop_type,
+        properties=row.properties,
+        area_ha=row.area_ha or 0.0,
+        geometry_hash=row.geometry_hash,
+        validation_notes=row.validation_notes or [],
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
 
 
 @router.get("/polygons", response_model=PolygonList)
 async def list_polygons(
+    db: Session = Depends(get_db),
     bbox: str | None = Query(default=None, description="minx,miny,maxx,maxy в EPSG:4326"),
-    source: PolygonSource | None = Query(default=None, description="Фильтр по источнику контура"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
 ) -> PolygonList:
-    """Список полигонов. Пустой список — валидное состояние, а не ошибка.
+    """Список контуров, при необходимости — в пределах bbox.
 
-    bbox валидируется здесь, а не в BE-004: иначе мусорное значение молча
-    возвращало бы 200 и регрессия всплыла бы только после реализации фильтрации.
+    Фильтр выполняется в PostGIS через `ST_Intersects` по GIST-индексу, а не
+    вычитыванием всех строк в Python: иначе демо на нескольких тысячах полей
+    начнёт тянуть всю таблицу на каждый сдвиг карты.
     """
+    statement = select(Polygon)
+    counter = select(func.count()).select_from(Polygon)
     if bbox is not None:
-        _parse_bbox(bbox)
-    return PolygonList(items=[], total=0)
+        minx, miny, maxx, maxy = _parse_bbox(bbox)
+        envelope = func.ST_MakeEnvelope(minx, miny, maxx, maxy, 4326)
+        statement = statement.where(func.ST_Intersects(Polygon.geometry, envelope))
+        counter = counter.where(func.ST_Intersects(Polygon.geometry, envelope))
+    total = db.execute(counter).scalar_one()
+    rows = db.execute(statement.order_by(Polygon.created_at.desc()).limit(limit).offset(offset))
+    return PolygonList(items=[_to_out(row) for row in rows.scalars()], total=int(total))
 
 
 @router.post("/polygons", response_model=PolygonOut, status_code=status.HTTP_201_CREATED)
-async def create_polygon(payload: PolygonCreate) -> PolygonOut:
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail=_NOT_IMPLEMENTED)
+async def create_polygon(payload: PolygonCreate, db: Session = Depends(get_db)) -> PolygonOut:
+    """Создать контур.
+
+    Геометрия проверяется до записи: тип, диапазон координат, antimeridian, число
+    вершин, валидность и площадь в гектарах. `make_valid` разрешён, но только с
+    отметкой в `validation_notes` — молча подменять контур пользователя нельзя (§8.4).
+    """
+    try:
+        normalized = normalize(payload.geometry.model_dump())
+    except GeometryError as exc:
+        # Текст GeometryError сформирован для показа пользователю: ни путей, ни трейсов.
+        raise HTTPException(422, detail=f"{exc.code}: {exc}") from None
+
+    notes: list[str] = []
+    if normalized.repaired:
+        notes.append(
+            "GEOMETRY_REPAIRED: контур был невалиден и восстановлен make_valid; "
+            "сохранена исправленная геометрия"
+        )
+
+    row = Polygon(
+        name=payload.name,
+        geometry=from_shape(normalized.geometry, srid=4326),
+        geometry_hash=normalized.geometry_hash,
+        area_ha=normalized.area_ha,
+        source=payload.source.value,
+        source_id=payload.source_id,
+        crop_type=payload.crop_type,
+        properties=payload.properties,
+        validation_notes=notes,
+        # Конкурсный идентификатор приходит через properties: он нужен offline-пути
+        # BE-008, чтобы найти ряд полигона в data/*.csv, но в C-07 отдельного поля нет.
+        anon_polygon_id=(payload.properties or {}).get("anon_polygon_id"),
+    )
+    db.add(row)
+    db.flush()
+    db.refresh(row)
+    return _to_out(row)
 
 
 @router.get("/polygons/{polygon_id}", response_model=PolygonOut)
-async def get_polygon(polygon_id: str) -> PolygonOut:
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail=_NOT_IMPLEMENTED)
+async def get_polygon(polygon_id: str, db: Session = Depends(get_db)) -> PolygonOut:
+    row = db.get(Polygon, polygon_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="полигон не найден")
+    return _to_out(row)
 
 
 @router.delete("/polygons/{polygon_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_polygon(polygon_id: str) -> None:
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail=_NOT_IMPLEMENTED)
+async def delete_polygon(polygon_id: str, db: Session = Depends(get_db)) -> None:
+    """Удалить контур вместе с его анализами (каскад в схеме)."""
+    row = db.get(Polygon, polygon_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="полигон не найден")
+    db.delete(row)
 
 
 @router.post("/field-search", response_model=FieldSearchResponse)
 async def field_search(payload: FieldSearchRequest) -> FieldSearchResponse:
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail=_NOT_IMPLEMENTED)
+    raise HTTPException(
+        status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Реализуется в BE-010 (fields_world → OSM → WorldCereal → ручной контур).",
+    )
