@@ -1,17 +1,32 @@
 # DL R&D — 2026-09-05
 
-Статус: **PENDING_EVALUATION** для DL-импутации; **REVIEW** для C-06/C-09 draft.
-Production candidate не экспортирован. Решения ADOPT/ENSEMBLE_ONLY/REJECT пока
-невозможны: ещё нет DL OOF по согласованной training policy и доступного final ML
-ensemble OOF для сравнения. Числа ~0.06 из задания не считаются воспроизведённой
-baseline. ML submission не зависит от DL.
+Статус: DL-импутация впервые измерена на **реальных фолдах ML**; решение
+об внедрении остаётся **PENDING_EVALUATION** по причине, которая не зависит
+от качества DL: у ML не опубликованы построчные OOF сильной модели, поэтому
+порог gate «улучшение composite на 0.002 относительно финального ML» не имеет
+вычислимого знаменателя (B-DL-004). Production candidate не экспортирован.
+C-06 поднят до 0.2, C-09 остаётся в REVIEW. ML submission от DL не зависит.
 
-**Обновление после нового fetch:** ML@39a8f73 уже публикует C-01/MaskSpec/folds/baseline
-OOF, Backend@350faec — SH-002. Они ещё не интегрированы в main. Выполнен реальный
-consumer review всех 16 folds/13 317 OOF keys и равенства baseline metrics.
-См. [integration review](dl_integration_review.md): остаются DL inner/train mask policy,
-адаптация training runner к точному контексту C/D и доступ к final ML ensemble OOF.
-Найден воспроизводимый EOL/SHA256 дефект загрузки ML bundle на Windows.
+Что изменилось с прошлой публикации:
+
+1. `veg_recovery.dl.c03_bridge` исполняет producer-код ML read-only и строит
+   training manifest из его же outer keys, MaskSpec, censoring и baseline OOF.
+   Свои folds DL по-прежнему не создаёт; статус входа —
+   `derived_from_producer_artifacts`, не `accepted`.
+2. **Исправлена утечка в нашем runner.** Inference-контекст брался срезом сырого
+   кадра, поэтому producer censoring терялось: CV-C увидел бы наблюдения 2024
+   года, CV-D — все точки полигона, кроме одного разрешённого соседа. Метрики
+   C и D без этого исправления были бы недействительны.
+3. Обучение идёт блоками: каждый блок маскируется отдельно, поэтому плотность
+   искусственных пропусков в обучении близка к тестовой, а не в разы выше.
+4. Добавлен `SeasonalPrior` и `base_mode=anchored`. В forecasting-режиме окно
+   polygon-year пусто, и prior — единственный источник сезонной формы.
+5. Epoch не выбирается по outer OOF: `--epoch-policy fixed`, бюджет закреплён
+   заранее по inner-кривой пилота.
+6. DL доступен за общим интерфейсом C-02 (`ResidualTCNExpert`), поэтому пункт 8
+   adoption gate закрыт технически, а не декларативно.
+
+<!--CV_RESULTS_PLACEHOLDER-->
 
 ## Проверенная постановка и данные
 
@@ -47,35 +62,60 @@ Backend; текущие проверки используют существую
 
 | Задача | Артефакты | Статус и ограничения |
 |---|---|---|
-| DL-001/002, C-06 | `src/veg_recovery/dl/data.py`, `tests/dl/test_data.py` | REVIEW, CSV fallback; нужен alignment с реальным C-01/C-03 |
-| DL-003 | `models/tcn.py`, `training.py`, `train.py`, `predict.py`, `artifacts.py` | CPU fixture проверяется; реальные метрики ждут C-03 |
-| DL-004 preparation | `models/pypots.py`, tests | Только public impute adapter и X/X_ori alignment; сами BRITS/SAITS ещё не обучены и библиотека не установлена |
-| OOF harness | `evaluation.py`, `ml_handoff.py`, `configs/dl/c03_consumer.md` | Проверены реальные ML folds, keys/labels и baseline metric equality; training policy/consumer ещё требуют ML review |
-| DL-007/008/009/010, C-09 | `anomalies/events.py`, `advanced.py`, `explain.py` | REVIEW, чистый CPU API; Backend acknowledgement pending |
-| Anomaly evidence | `reports/anomaly_cases/synthetic_v1/`, `real_2024/` | 7 synthetic cases + 39 real polygon diagnostics; 3 сильных/3 сомнительных PNG просмотрены, экспертный review pending |
-| Kaggle | `configs/dl/kaggle/run_tcn.ipynb` | Подготовлен, на Kaggle не запускался; требует C-03 и проверку версии runtime |
+| DL-001/002, C-06 0.2 | `dl/data.py` (`WindowDatasetAdapter`, `SeasonalPrior`), `tests/dl/test_data.py`, `tests/dl/test_c03_bridge.py` | REVIEW: адаптер обучается и предсказывает на реальном `split_fold` во всех 16 фолдах |
+| C-03 consumer 0.2 | `dl/c03_bridge.py`, `configs/dl/c03_consumer.md`, `artifacts/dl/c03_derived/` | Producer-код ML исполняется read-only; censoring проверяется round-trip; `review_status=derived_from_producer_artifacts` |
+| DL-003 | `models/tcn.py`, `training.py`, `train.py`, `artifacts/dl/cv_tcn_v1/` | Полная CV 16 фолдов × 3 seed; epoch фиксирован заранее, не по outer OOF |
+| Отчётность | `dl/report.py`, `reports/dl_experiments.csv` | Три строки на seed: TCN, только base, ML baseline; вес бленда — leave-one-fold-out |
+| Интеграция C-02 | `dl/expert.py`, `tests/dl/test_expert.py` | `ResidualTCNExpert.predict(ReconstructionRequest)`; интервалы объявлены некалиброванными, source не классифицируется |
+| DL-004 preparation | `models/pypots.py`, tests | Только public impute adapter и X/X_ori alignment; BRITS/SAITS не обучены, библиотека не установлена |
+| DL-007/008/009/010, C-09 | `anomalies/{events,advanced,explain}.py` | REVIEW, чистый CPU API; Backend acknowledgement pending |
+| Anomaly evidence | `reports/anomaly_cases/{synthetic_v1,real_2024}/` | 7 synthetic + 39 real polygon diagnostics; экспертный review pending |
+| Kaggle | `configs/dl/kaggle/{package_dataset.py,run_tcn.ipynb,README.md}`, `artifacts/dl/kaggle_bundle.zip` | Автономный bundle 7.54 МБ; preflight на 16 фолдов проходит из распакованного архива; на GPU не запускался |
 
 TCN: три bidirectional dilated Conv1d блока, missing/invalid masks, календарь,
-delta since/until, crop token с unknown=0. Начальное предсказание равно linear
-base; поправка ограничена tanh, итоговый NDVI автоматически не clip. Loss —
-только первоначально наблюдённый искусственно скрытый target в центре каждого
-окна. NaN labels индексируются до вычисления loss. Dropout, clipping, CPU
-determinism, inner early stopping, SHA256 и `weights_only=True` при загрузке.
+delta since/until, crop token с unknown=0, нормированные base/prior и уровень
+поддержки prior. `input_features` 61 (было 58). Начальное предсказание равно
+residual base; поправка ограничена tanh, итоговый NDVI автоматически не clip.
+Loss — только первоначально наблюдённый искусственно скрытый target в центре
+окна; NaN labels индексируются до вычисления loss. Dropout, clipping, CPU
+determinism, SHA256 и `weights_only=True` при загрузке.
 
-CSDI/pretraining/HELIX не запускались: P1/P2 gates и необходимый baseline handoff
-не готовы. Не добавлены тяжёлые framework dependencies без измеримой потребности.
+### Три вещи, которые делают сравнение честным
+
+1. **Censoring переносится, а не воспроизводится по памяти.** Ключи выводятся
+   разностью сырого кадра и `split_fold(...).context_frame`, и сборка падает,
+   если `apply_mask(train, censored)` не воспроизвёл producer context.
+2. **Обучающая маска похожа на тестовую.** Шесть блоков внутри `fit_frame`,
+   каждый маскируется отдельно; длины серий взяты из распределения реального
+   test (2827 одиночных, 136 двойных, 3 тройных, 1 четверная).
+3. **Epoch не выбирается по оцениваемым строкам.** `--epoch-policy fixed`,
+   бюджет 16 закреплён по inner-кривой пилота: плато на 12–17 эпохе в matched,
+   unseen и temporal.
+
+CSDI/pretraining/HELIX не запускались: P1/P2 gates и bundle сравнения не готовы.
+Тяжёлые framework dependencies без измеримой потребности не добавлялись.
 
 ## Почему план уточнён
 
 1. Полная маска контекста до windowing закрывает утечку через соседние окна.
-2. Inner early stopping исключает выбор epoch по оценочным outer OOF labels.
-3. Composite и overall публикуются отдельно; incomplete CV не даёт ADOPT.
-4. Отсутствие данных для сравнения — PENDING_EVALUATION, а не отрицательный опыт.
-5. Stock SAITS `fit` выполняет cell-wise MCAR внутри DatasetForSAITS; это
-   отдельная training distribution. Нужен C-03 training bridge прежде чем
-   называть опыт воспроизведением на matched-mask протоколе.
-6. Для anomaly критичность требует persistence/observed support, а confidence
-   явно обозначает поддержку данными. При недостатке истории возвращается warning.
+2. **Producer censoring переносится явными ключами.** Срез сырого кадра его
+   терял, поэтому CV-C и CV-D увидели бы скрытые ML значения. Это был дефект
+   DL runner, а не артефактов ML.
+3. Epoch не выбирается ни по outer OOF, ни по DL-inner: бюджет фиксирован
+   заранее. Пока ML не передал inner keys, `early_stop` — только проверка
+   чувствительности, не основная конфигурация.
+4. Обучение блоками, потому что маскировать все обучающие цели сразу означает
+   учить модель на контексте заметно реже тестового.
+5. Composite и row-weighted RMSE публикуются отдельно; incomplete CV не даёт ADOPT.
+6. Отсутствие данных для сравнения — PENDING_EVALUATION, а не отрицательный опыт.
+   Сейчас это ровно тот случай: у ML не опубликованы построчные OOF сильной модели.
+7. Stock SAITS `fit` выполняет cell-wise MCAR внутри DatasetForSAITS; это отдельная
+   training distribution. Блочный маскировщик C-03 даёт готовый bridge, но
+   эксперимент пока не проведён и не заявляется.
+8. Сезонный prior — статистика обучающего фолда, а не сервинга: в CV он берётся
+   из fit-контекста, в `ResidualTCNExpert` — из явного reference-контекста.
+9. Для anomaly критичность требует persistence/observed support, а confidence явно
+   обозначает поддержку данными. При недостатке истории возвращается warning.
 
 Проверенные первичные источники: [SAITS paper](https://arxiv.org/abs/2202.08516),
 [BRITS paper](https://proceedings.neurips.cc/paper/2018/hash/734e6bfcd358e25ac1db0a4241b95651-Abstract.html),
@@ -83,7 +123,7 @@ CSDI/pretraining/HELIX не запускались: P1/P2 gates и необхо�
 [PyPOTS SAITS masking](https://github.com/WenjieDu/PyPOTS/blob/main/pypots/imputation/saits/data.py),
 [PyPOTS license BSD-3-Clause](https://github.com/WenjieDu/PyPOTS/blob/main/LICENSE).
 Версия PyPOTS будет закреплена после проверки реальной установки и training bridge;
-moving `main`/`latest` не используются как зафиксированная экспериментальная зависимость.
+moving `main`/`latest` не используются как зафиксированная зависимость.
 
 ## Anomaly contract для Backend
 
@@ -142,42 +182,84 @@ sensor alignment MAE относительно S2 снизился с 0.05338 д�
 
 ## Команды
 
-Финальная локальная проверка: **60 tests passed in 25.02s**, Ruff passed.
-Дополнительно отдельно выполнен ML consumer audit всех 16 реальных folds;
-это не добавлено к числу unit tests и не является DL обучением.
+PowerShell из корня репозитория. Worktree ML — read-only источник C-01/C-03.
 
-PowerShell из корня репозитория:
+```powershell
+git worktree add --detach tmp/dl-review-ml origin/ML
+$env:PYTHONPATH='src;tmp/dl-review-ml/src'
+
+# 1. Производный C-03 manifest: outer keys, censoring и baseline OOF от ML
+python -m veg_recovery.dl.c03_bridge --ml-root tmp/dl-review-ml --output artifacts/dl/c03_derived
+
+# 2. Проверка входов без torch и без обучения
+python -m veg_recovery.dl.train --fold-manifest artifacts/dl/c03_derived/dl_c03.json --preflight-only
+
+# 3. Полная CV (CPU; на Kaggle то же самое с --device cuda)
+python -m veg_recovery.dl.train --fold-manifest artifacts/dl/c03_derived/dl_c03.json `
+  --seeds 17 42 73 --epochs 16 --epoch-policy fixed --base-mode anchored `
+  --window 61 --device cpu --cpu-threads 8 --output artifacts/dl/cv_tcn_v1
+
+# 4. Таблицы отчёта
+python -m veg_recovery.dl.report --run artifacts/dl/cv_tcn_v1 --experiments reports/dl_experiments.csv
+
+# 5. Архив для Kaggle Dataset
+python configs/dl/kaggle/package_dataset.py --ml-root tmp/dl-review-ml
+```
+
+Offline-проверки без кода ML:
 
 ```powershell
 $env:PYTHONPATH='src'
 python -m pytest -q tests/dl tests/anomalies -p no:cacheprovider
-python -m ruff check src/veg_recovery/dl src/veg_recovery/anomalies tests/dl tests/anomalies --no-cache
-python -m veg_recovery.dl.train --smoke --seeds 17 42 73 --epochs 3 --window 15 --hidden-size 16 --layers 2 --output artifacts/dl/new_cpu_smoke
+python -m ruff check src tests --no-cache
+python -m veg_recovery.dl.train --smoke --seeds 17 42 73 --epochs 8 --window 15 `
+  --hidden-size 16 --layers 2 --output artifacts/dl/new_cpu_smoke
 python -m veg_recovery.dl.anomaly_cases --output reports/anomaly_cases/synthetic_v1
 python -m veg_recovery.dl.real_anomaly_cases --year 2024 --output reports/anomaly_cases/real_2024
 ```
 
+Сборка входов детерминирована: gzip пишется с `mtime=0`, поэтому SHA256 в
+manifest воспроизводятся. `artifacts/dl/.gitattributes` помечает `*.json`,
+`*.csv`, `*.gz`, `*.zip`, `*.pt` как `-text`, чтобы Git не переписал EOL уже
+захешированным файлам — тот же класс дефекта, что B-DL-003 у bundle ML.
+
 Для повторного smoke используйте новый output path: существующий checkpoint
-намеренно не перезаписывается. Standalone runtime import требует numpy/pandas;
-TCN — дополнительно torch; графики — matplotlib; tests — pytest. Shared extra `dl`
-и uv.lock должен принять Backend по SH-002; чужие dependency files не менялись.
+намеренно не перезаписывается. Runtime import требует numpy/pandas; TCN —
+дополнительно torch; графики — matplotlib; тесты — pytest. Shared extra `dl`
+и uv.lock принимает Backend по SH-002; чужие dependency files не менялись.
 
-Для Kaggle: инструкция и notebook в `configs/dl/kaggle/`.
-`--preflight-only` с C-03 проверяет fingerprint/keys/metrics до импорта torch.
+CPU smoke evidence: `artifacts/dl/cpu_smoke_v3/`, 3 seed, fixture-модель
+3 817 параметров, 19 183 байта весов на seed, максимальная ошибка после
+save/load ровно 0. `cpu_smoke_v2` сохранён как срез C-06 0.1 (58 признаков) и
+загружается, но его нельзя питать текущим адаптером: тот отдаёт 61 признак.
+Fixture RMSE — **не конкурсный результат и не adoption evidence**.
 
-Опубликованный CPU smoke evidence: `artifacts/dl/cpu_smoke_v2/`, source commit
-`a4f2563` plus per-source SHA256. 3 seed, 3 epochs, fixture model 3 769 parameters,
-weights 18 991 bytes per seed, save/load max abs error 0. Fixture inner RMSE
-0.002503/0.002598/0.001633 — **не конкурсный результат и не DL adoption evidence**.
-`reports/dl_experiments.csv` пока содержит только schema: реальные CV experiments
-ещё не выполнены; synthetic smoke хранится отдельно во избежание смешения метрик.
+Для Kaggle: `configs/dl/kaggle/README.md`, пошагово от сборки архива до
+скачивания результатов. `--preflight-only` проверяет fingerprint, ключи и
+равенство метрик ML до импорта torch.
 
 ## Следующий наиболее ценный опыт
 
-ML подтверждает уже опубликованные C-01/apply_mask/outer folds, предоставляет
-inner/train-target policy и отсутствующие final ensemble OOF с исходными метриками.
-В DL runner переносим проверенное producer context censoring C/D. Затем одна
-TCN-конфигурация на 3 seed CPU или Kaggle;
-Huber/MSE, window 61/91/121 — только после equality gate на тех же folds.
-Параллельно Backend может интегрировать C-09 draft и подтвердить JSON smoke.
-До review ни одна задача не помечается DONE и процент CP не увеличивается.
+По убыванию ценности на текущую дату.
+
+1. **Построчные OOF сильной модели от ML** (B-DL-004). Без них порог gate не
+   вычисляется, и любой вывод об ADOPT опирался бы на число из чужого отчёта,
+   а не на одинаковые строки. Достаточно двух колонок в существующем OOF-файле.
+2. **Ансамбль с сильной моделью ML**, а не замена её. Индуктивные смещения
+   разные: дерево берёт табличный контекст, TCN — форму окна и сезонный prior.
+   Вес выбирается leave-one-fold-out, уже реализовано в `dl.report`.
+3. **Калиброванная неопределённость.** Это единственная ветка gate, которую не
+   закрывает точечный RMSE, и она нужна продукту: `lower/upper` сегодня честно
+   помечены как некалиброванные. Квантильная голова на том же runner дешевле и
+   воспроизводимее, чем CSDI; диффузию запускать только если квантили не хватит.
+4. **Проверка чувствительности к политике epoch и к base.** `--epoch-policy
+   early_stop` и `--base-mode linear` на тех же фолдах: если решение не меняется,
+   возражение о выборе бюджета снимается количественно.
+5. **SAITS/BRITS на matched-mask bridge.** Блочный маскировщик C-03 уже даёт
+   нужное распределение пропусков, поэтому эксперимент стал дешевле. Но приоритет
+   ниже пунктов 1–3: на 39 обучающих полигонах ожидание выигрыша низкое, и
+   отрицательный результат тоже нужно уметь опубликовать честно.
+
+Параллельно Backend может интегрировать C-09 draft и подтвердить JSON smoke,
+а ML — рассмотреть D-DL-011. До review ни одна задача не помечается DONE и
+процент checkpoint не увеличивается.

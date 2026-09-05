@@ -1,0 +1,178 @@
+{
+  "environment": {
+    "cuda_available": false,
+    "cuda_version": "12.1",
+    "cudnn_benchmark": false,
+    "cudnn_deterministic": true,
+    "cudnn_version": 90100,
+    "deterministic_algorithms": true,
+    "git_commit": "56c4539ab8c2a905c1bcad6720693d06d2061c8e",
+    "git_worktree_dirty": true,
+    "gpu": [],
+    "packages": {
+      "numpy": "2.4.6",
+      "pandas": "2.2.3",
+      "pytest": "9.0.2",
+      "torch": "2.5.1+cu121"
+    },
+    "platform": "Windows-10-10.0.26200-SP0",
+    "python": "3.11.0",
+    "source_sha256": {
+      "anomalies/advanced.py": "489e0f473ddb5f7cd437147040e50cb7b59b62a0ad43aea9fbf204f2e2243204",
+      "anomalies/events.py": "c72cd0aaedf71fdafed72931bff261c0b06100e341b14b4d413240dc74936084",
+      "anomalies/explain.py": "50797f3f9bbef73db6ed24f05944205192775bd7c719f46636c5c3ce3fdfdd4b",
+      "dl/__init__.py": "ee72dece67080899569b3371bf3cd3c07cff8bc853a8aa1005386b227a988767",
+      "dl/anomaly_cases.py": "3387be471e2988c566535f5c8f472b22d7280c394d4beb6808346a7a3f87865f",
+      "dl/artifacts.py": "5a2eebb9ce0d81e90c7e9239babd83c72ac10fd6c9ead9eaa66ea4aea6b0b899",
+      "dl/c03_bridge.py": "feff6b29a42e42e3d7e8fc2f0eea2d20d2cd44bdb9322de667efc246c58a3d5f",
+      "dl/data.py": "3652ae461d7ac0c7c2600d1aee53129b7de09a9fa81a4b8867e0cca1f2144adc",
+      "dl/evaluation.py": "103f54f57d2a4cf69292acb613a3be66aa1d08172c1ffdf45c1e76957083f534",
+      "dl/expert.py": "ef1956e32d4dc05068ed0e1fef31e4ebd8be42a9c596210a2a03cc0972dcf5bd",
+      "dl/fixtures.py": "b85ce12137cfe6d61e4dfcd14affbb134cba84547003174dff38889ed9ceacf4",
+      "dl/ml_handoff.py": "5c385360f3f5962c7c54fa74a8331e16a6c766d18493f8e80dc035955ce7b763",
+      "dl/models/__init__.py": "8bbcd894ad5dae396d3e72bc3c3bb3a2c41e6f21895e00ea76bfe3d55acda6aa",
+      "dl/models/pypots.py": "9b02cf3549be7da7538268bf37a448098004d88632721ffb14e2aeba78a5af30",
+      "dl/models/tcn.py": "fe9eeff1c377f5501ca0fa7673419976cf344ee53158296d9275d0cf29f56e8c",
+      "dl/predict.py": "aef5b4e6edf1ea3d70343e778a4f220cb7f61626f80821639d604027909733d0",
+      "dl/real_anomaly_cases.py": "c1ebde8ecd1a189476b7321756054a481dc2528a512fc80acf20f0a576eb24df",
+      "dl/report.py": "a2c635f9658a8d678b3a6a57b5ba640d11de173cfe329e11bf1ea0c51ffe9012",
+      "dl/train.py": "7df1698c064cdbd4a2c2fdaedc06982d6969ac1e5affb141fd260567f75e5db8",
+      "dl/training.py": "ffe19f796785a66b32f5d7aa9a84bc5e9272b5b29f95cd5149eae19c4599c7ec"
+    }
+  },
+  "files": {
+    "preprocessor.json": "d04a7a85a751ee37971bd1a4f0c504a929252df1e1ec7b155e0ecdd1c5cccbbf",
+    "weights.pt": "ada0b6b7b362f7a788f095b92d69e9e8fbd8913e8b5bbd1ec05143fc1faccae0"
+  },
+  "metadata": {
+    "base_mode": "anchored",
+    "data_fingerprint": "f54bf30e450f1394c3635b48c3a4704abbdc6ba0db575f08a115c2cc41a30a34",
+    "fold": "r1_f0",
+    "fold_version": "folds_v1",
+    "history": [
+      {
+        "epoch": 1,
+        "inner_rmse": 0.09622378098956691,
+        "train_loss": 0.0028387060528646123
+      },
+      {
+        "epoch": 2,
+        "inner_rmse": 0.09106160124338292,
+        "train_loss": 0.0023141323044483875
+      },
+      {
+        "epoch": 3,
+        "inner_rmse": 0.09109369877054778,
+        "train_loss": 0.002076248336093483
+      },
+      {
+        "epoch": 4,
+        "inner_rmse": 0.08871659437853378,
+        "train_loss": 0.001986510246452753
+      },
+      {
+        "epoch": 5,
+        "inner_rmse": 0.08742278734432293,
+        "train_loss": 0.0018652378053251486
+      },
+      {
+        "epoch": 6,
+        "inner_rmse": 0.0870577651625461,
+        "train_loss": 0.0018021860884379055
+      },
+      {
+        "epoch": 7,
+        "inner_rmse": 0.08663524110974553,
+        "train_loss": 0.0017233660912156982
+      },
+      {
+        "epoch": 8,
+        "inner_rmse": 0.08475964342623636,
+        "train_loss": 0.0016420692151048705
+      },
+      {
+        "epoch": 9,
+        "inner_rmse": 0.08538137070952105,
+        "train_loss": 0.0015954158031216991
+      },
+      {
+        "epoch": 10,
+        "inner_rmse": 0.08467520020100817,
+        "train_loss": 0.0015340715681682459
+      },
+      {
+        "epoch": 11,
+        "inner_rmse": 0.08659250915539714,
+        "train_loss": 0.0015077153867733245
+      },
+      {
+        "epoch": 12,
+        "inner_rmse": 0.08532513382190136,
+        "train_loss": 0.0014691114056329731
+      },
+      {
+        "epoch": 13,
+        "inner_rmse": 0.08511845462445523,
+        "train_loss": 0.0014068271932745657
+      },
+      {
+        "epoch": 14,
+        "inner_rmse": 0.08630160636773761,
+        "train_loss": 0.001380563583341474
+      },
+      {
+        "epoch": 15,
+        "inner_rmse": 0.08391254406088286,
+        "train_loss": 0.0013254555122578946
+      },
+      {
+        "epoch": 16,
+        "inner_rmse": 0.08472646357146318,
+        "train_loss": 0.0012913522064418835
+      }
+    ],
+    "infer_sec": 1.2473437000007834,
+    "kind": "C03_OOF_research",
+    "mask_version": "real_test_v1",
+    "prior_fingerprint": "9ef41eab17be880102ba29d909f76406002ffbf4fc0d46199083391324e1feea",
+    "result": {
+      "best_epoch": 16,
+      "epoch_policy": "fixed",
+      "inner_rmse": 0.08472646357146318,
+      "parameters": 66593,
+      "peak_vram_mb": 0.0,
+      "train_sec": 224.83310840000195
+    },
+    "review_status": "derived_from_producer_artifacts",
+    "seed": 73,
+    "split": "matched",
+    "training": {
+      "batch_size": 32,
+      "cpu_threads": 8,
+      "device": "cpu",
+      "epoch_policy": "fixed",
+      "epochs": 16,
+      "gradient_clip": 1.0,
+      "learning_rate": 0.001,
+      "loss": "huber",
+      "patience": 6,
+      "seed": 73,
+      "weight_decay": 0.001
+    },
+    "window": 61
+  },
+  "model": "residual_tcn",
+  "model_config": {
+    "crop_embedding_dim": 8,
+    "dropout": 0.1,
+    "hidden_size": 64,
+    "input_features": 61,
+    "kernel_size": 5,
+    "layers": 3,
+    "n_crops": 4,
+    "residual_bound": 0.3
+  },
+  "preprocessor_fingerprint": "46c18f2affb3c87137bb73131dedb0d582f2748bbca87fbaa12d7ac76f4f41fb",
+  "production_approved": false,
+  "schema_version": "dl-research-0.1"
+}
