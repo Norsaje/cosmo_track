@@ -23,6 +23,7 @@ venv/
 # Kaggle upload files. Rebuild them with artifacts/ml/package_kaggle.py.
 /artifacts/ml/kaggle/*.ipynb
 /artifacts/ml/kaggle/package_manifest.json
+/artifacts/ml/kaggle/README_RU.md
 /artifacts/ml/kaggle_ndvi_*.zip
 /artifacts/ml/kaggle_ndvi_*.zip.sha256
 /artifacts/ml/ndvi_project/
