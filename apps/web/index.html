@@ -304,8 +304,12 @@
        лицензии, а не оформление. Мини-меню стоит по центру снизу и перекрывало
        её, поэтому на узких экранах атрибуция поднимается над меню. */
     @media (max-width: 767px) {
+      /* Атрибуция поднята над переключателем подложки и мини-меню. Она длинная
+         (OpenStreetMap плюс Esri) и тянется через весь низ экрана, поэтому
+         разойтись с ними по горизонтали не выйдет — только по высоте.
+         Сворачивать её в значок нельзя: требование лицензий — видимый текст. */
       .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left {
-        bottom: calc(58px + env(safe-area-inset-bottom));
+        bottom: calc(120px + env(safe-area-inset-bottom));
       }
     }
 
@@ -313,8 +317,45 @@
     .map-actions {
       position: absolute; left: 12px; top: 12px; z-index: 15;
       display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+      /* Ширина по содержимому, но не шире экрана: без ограничения длинная
+         подпись растягивала контейнер под всю карту, и невидимая колонка
+         перехватывала клики по ней. */
+      max-width: calc(100% - 24px);
     }
-    .map-actions button { box-shadow: var(--shadow-md); background: var(--content1); }
+    .map-actions button {
+      box-shadow: var(--shadow-md); background: var(--content1);
+      /* Кнопка не сжимается до многоточия и не переносит подпись: в колонке
+         flex-элементы по умолчанию сжимаются по высоте содержимого, а текст
+         внутри уезжал за край. */
+      white-space: nowrap; flex: none;
+    }
+
+    /* Переключатель подложки — внизу слева. Отдельно от действий над полем:
+       это свойство карты, а не операция над данными. */
+    .map-basemap {
+      position: absolute; left: 12px; z-index: 15;
+      bottom: calc(72px + env(safe-area-inset-bottom));
+      box-shadow: var(--shadow-md); background: var(--content1);
+      white-space: nowrap;
+    }
+    @media (min-width: 768px) {
+      /* На десктопе мини-меню нет, и запас снизу не нужен. */
+      .map-basemap { bottom: 12px; }
+    }
+
+    /* Подсказка рисования: над мини-меню, по центру, поверх карты. */
+    .draw-hint {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      bottom: calc(76px + env(safe-area-inset-bottom));
+      z-index: 17; max-width: min(92vw, 420px);
+      padding: 10px 14px; border-radius: var(--radius-md);
+      background: var(--content1); color: var(--foreground);
+      box-shadow: var(--shadow-lg); font-size: var(--font-tiny);
+      line-height: var(--lh-small); text-align: center;
+    }
+    @media (min-width: 768px) {
+      .draw-hint { bottom: 16px; left: calc(50% - 190px); }
+    }
 
     /* ------------------------------------------- планшет и десктоп: без жестов */
     @media (min-width: 768px) {
@@ -452,9 +493,20 @@
       <button id="btn-draw" class="btn-sm">Нарисовать поле</button>
       <button id="btn-cancel" class="btn-sm btn-bordered" hidden>Отмена</button>
       <button id="btn-finish" class="btn-sm btn-primary" hidden disabled>Завершить контур</button>
-      <button id="btn-basemap" class="btn-sm" type="button" aria-pressed="false"
-              title="Переключить подложку">Спутник</button>
     </div>
+
+    <!-- Подсказка про рисование живёт на карте, а не в панели: рисуют по карте,
+         и панель в этот момент закрыта — там её просто никто не видел. -->
+    <div class="draw-hint" id="draw-hint" role="status" hidden>
+      Ставьте вершины кликами по карте — нужно не меньше трёх,
+      затем нажмите «Завершить контур».
+    </div>
+
+    <!-- Переключатель подложки — внизу слева, отдельно от действий над полем:
+         это свойство карты, а не операция, и соседство с «Нарисовать поле»
+         заставляло каждый раз перечитывать обе кнопки. -->
+    <button id="btn-basemap" class="map-basemap btn-sm" type="button" aria-pressed="false"
+            title="Переключить подложку">Спутник</button>
 
     <div class="backdrop" id="backdrop" data-visible="false" aria-hidden="true"></div>
 
@@ -494,11 +546,6 @@
       </div>
 
       <div class="sheet-body" id="sheet-body">
-        <div id="draw-hint" class="alert alert-default" hidden>
-          <div>Ставьте вершины кликами по карте — нужно не меньше трёх,
-          затем нажмите «Завершить контур».</div>
-        </div>
-
         <div class="card" id="save-form" hidden>
           <h2>Сохранить поле</h2>
           <label for="field-name">Название поля</label>
@@ -567,13 +614,22 @@
       // Период хранится в состоянии, а не только в полях ввода: плитка
       // перерисовывается при каждом выборе, и вместе с ней пересоздаются input —
       // без этого выбранные даты сбрасывались бы к значениям по умолчанию.
-      dateFrom: "2024-04-01", dateTo: "2024-09-30",
+      // По умолчанию — текущий год целиком: интерес почти всегда к тому, что
+      // происходит сейчас, а не к прошлому сезону. Дата берётся локальная,
+      // а не из toISOString(): он переводит в UTC и вечером даёт завтрашний день.
+      dateFrom: "2026-01-01", dateTo: localToday(),
       satellite: false,
     };
 
     const $ = (id) => document.getElementById(id);
     const api = (path, options) => fetch("/api/v1" + path, options);
     const isMobile = () => window.matchMedia("(max-width: 767px)").matches;
+
+    function localToday() {
+      const now = new Date();
+      const pad = (value) => String(value).padStart(2, "0");
+      return now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
+    }
     const esc = (value) => String(value === null || value === undefined ? "" : value)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
